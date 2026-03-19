@@ -2,6 +2,11 @@
 
 import { useState } from "react";
 import { approveUser, rejectUser } from "@/app/actions/admin";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { TableRow, TableCell } from "@/components/ui/table";
+import { Check, X, Loader2 } from "lucide-react";
 
 export default function AdminApprovalClient({ user }: { user: any }) {
   const [loading, setLoading] = useState(false);
@@ -23,66 +28,72 @@ export default function AdminApprovalClient({ user }: { user: any }) {
   };
 
   return (
-    <tr key={user.id}>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="text-sm font-medium text-gray-900">{user.full_name}</div>
-      </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+    <TableRow key={user.id}>
+      <TableCell className="font-medium">
+        {user.full_name}
+      </TableCell>
+      <TableCell>
+        <Badge variant="secondary" className="capitalize">
           {user.roles.name}
-        </span>
-      </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="text-sm text-gray-900">{user.email}</div>
-        <div className="text-sm text-gray-500">{user.phone_number}</div>
-      </td>
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+        </Badge>
+      </TableCell>
+      <TableCell>
+        <div className="text-sm">{user.email}</div>
+        <div className="text-xs text-muted-foreground">{user.phone_number}</div>
+      </TableCell>
+      <TableCell className="text-muted-foreground text-sm">
         {new Date(user.created_at).toLocaleDateString()}
-      </td>
-      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+      </TableCell>
+      <TableCell className="text-right">
         {rejectMode ? (
           <div className="flex items-center justify-end space-x-2">
-            <input 
+            <Input 
               type="text" 
               placeholder="Reason..." 
               value={reason} 
               onChange={(e) => setReason(e.target.value)}
-              className="border border-gray-300 rounded px-2 py-1 text-xs w-32"
+              className="h-8 w-40 text-xs"
             />
-            <button 
+            <Button 
+              size="sm" 
+              variant="destructive"
               onClick={handleReject}
               disabled={loading}
-              className="text-white bg-red-600 hover:bg-red-700 px-3 py-1 rounded disabled:opacity-50"
             >
-              Confirm
-            </button>
-            <button 
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm"}
+            </Button>
+            <Button 
+              size="sm" 
+              variant="ghost"
               onClick={() => setRejectMode(false)}
               disabled={loading}
-              className="text-gray-600 hover:text-gray-900 px-2"
             >
               Cancel
-            </button>
+            </Button>
           </div>
         ) : (
-          <div className="space-x-3">
-            <button 
+          <div className="flex justify-end space-x-2">
+            <Button 
+              size="sm" 
+              variant="outline"
+              className="text-green-600 hover:text-green-700 hover:bg-green-50"
               onClick={handleApprove}
               disabled={loading}
-              className="text-green-600 hover:text-green-900 disabled:opacity-50"
             >
-              Approve
-            </button>
-            <button 
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Check className="mr-1 h-3 w-3" /> Approve</>}
+            </Button>
+            <Button 
+              size="sm" 
+              variant="outline"
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
               onClick={() => setRejectMode(true)}
               disabled={loading}
-              className="text-red-600 hover:text-red-900 disabled:opacity-50"
             >
-              Reject
-            </button>
+              <X className="mr-1 h-3 w-3" /> Reject
+            </Button>
           </div>
         )}
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }
