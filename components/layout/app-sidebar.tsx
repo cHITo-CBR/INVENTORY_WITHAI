@@ -20,7 +20,8 @@ import {
   Sparkles, 
   Tags, 
   Users, 
-  Bell
+  Bell,
+  Archive
 } from "lucide-react";
 import {
   Sidebar,
@@ -38,6 +39,8 @@ import {
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
 import Image from "next/image";
+import { Scale } from "lucide-react";
+import { getCurrentUser } from "@/app/actions/auth";
 
 const navItems = [
   {
@@ -67,11 +70,9 @@ const catalogItems = [
   { title: "Categories", url: "/catalog/categories", icon: Box },
   { title: "Brands", url: "/catalog/brands", icon: Tags },
   { title: "Units", url: "/catalog/units", icon: Scale }, // Note: Scale is not imported, use something else? 
-  // Let's use Package2 for units
   { title: "Packaging Types", url: "/catalog/packaging", icon: Box },
 ];
 // Fix icon imports
-import { Scale } from "lucide-react"; 
 
 const operationsItems = [
   { title: "Inventory", url: "/inventory", icon: ClipboardList },
@@ -87,11 +88,21 @@ const analyticsItems = [
 const systemItems = [
   { title: "Notifications", url: "/notifications", icon: Bell },
   { title: "Audit Logs", url: "/audit", icon: FileText },
+  { title: "Archives", url: "/archives", icon: Archive },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const [user, setUser] = React.useState<{ full_name?: string; email?: string; role?: string } | null>(null);
+
+  React.useEffect(() => {
+    getCurrentUser().then((session) => {
+      if (session?.user) {
+        setUser(session.user);
+      }
+    });
+  }, []);
 
   return (
     <Sidebar variant="inset" className="border-r border-gray-200">
@@ -107,7 +118,13 @@ export function AppSidebar() {
             Main
           </SidebarGroupLabel>
           <SidebarMenu>
-            {navItems.map((item) => (
+            {navItems.filter(item => {
+              if (user?.role !== "admin") {
+                if (item.url === "/admin/approvals" || item.url === "/users") return false;
+                if (item.url === "/dashboard" && user?.role !== "supervisor") return false;
+              }
+              return true;
+            }).map((item) => (
               <SidebarMenuItem key={item.title}>
                 <SidebarMenuButton 
                   asChild 
@@ -168,37 +185,39 @@ export function AppSidebar() {
           </SidebarMenu>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-[#005914] font-semibold text-xs tracking-wider uppercase mb-1">
-            Analytics & System
-          </SidebarGroupLabel>
-          <SidebarMenu>
-            {[...analyticsItems, ...systemItems].map((item) => (
-              <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton 
-                  asChild 
-                  isActive={pathname === item.url || pathname.startsWith(item.url + '/')}
-                  className="font-medium text-gray-700 data-[active=true]:bg-[#E2EBE5] data-[active=true]:text-[#005914] data-[active=true]:font-bold hover:bg-gray-50"
-                >
-                  <Link href={item.url}>
-                    <item.icon className="w-5 h-5 mr-1" />
-                    <span>{item.title}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
-        </SidebarGroup>
+        {user?.role === "admin" && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-[#005914] font-semibold text-xs tracking-wider uppercase mb-1">
+              Analytics & System
+            </SidebarGroupLabel>
+            <SidebarMenu>
+              {[...analyticsItems, ...systemItems].map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton 
+                    asChild 
+                    isActive={pathname === item.url || pathname.startsWith(item.url + '/')}
+                    className="font-medium text-gray-700 data-[active=true]:bg-[#E2EBE5] data-[active=true]:text-[#005914] data-[active=true]:font-bold hover:bg-gray-50"
+                  >
+                    <Link href={item.url}>
+                      <item.icon className="w-5 h-5 mr-1" />
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="bg-white border-t border-gray-100 p-4">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-[#005914] flex items-center justify-center text-white font-bold text-xs">
-            AD
+            {user?.full_name ? user.full_name.substring(0, 2).toUpperCase() : "AD"}
           </div>
           <div className="flex flex-col">
-            <span className="text-sm font-bold text-gray-900 leading-tight">Admin User</span>
-            <span className="text-xs text-gray-500 font-medium">admin@century.com</span>
+            <span className="text-sm font-bold text-gray-900 leading-tight">{user?.full_name ?? "Admin User"}</span>
+            <span className="text-xs text-gray-500 font-medium">{user?.email ?? "Loading..."}</span>
           </div>
         </div>
       </SidebarFooter>

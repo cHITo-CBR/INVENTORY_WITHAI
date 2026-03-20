@@ -34,12 +34,6 @@ export default async function AdminApprovalsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Admin Dashboard</h1>
           <p className="text-muted-foreground mt-1">Manage pending user registrations</p>
         </div>
-        <form action="/api/logout" method="post">
-           <Button variant="outline" size="sm">
-             <LogOut className="mr-2 h-4 w-4" />
-             Logout
-           </Button>
-        </form>
       </div>
       
       <Card>

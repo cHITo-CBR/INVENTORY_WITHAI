@@ -2,7 +2,7 @@
 
 import { supabase } from "@/lib/supabase";
 import bcrypt from "bcryptjs";
-import { createSession, clearSession } from "@/lib/session";
+import { createSession, clearSession, getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 
 export async function registerUser(prevState: any, formData: FormData) {
@@ -98,4 +98,8 @@ export async function loginUser(prevState: any, formData: FormData) {
 export async function logoutUser() {
   await clearSession();
   redirect("/login");
+}
+
+export async function getCurrentUser() {
+  return await getSession();
 }

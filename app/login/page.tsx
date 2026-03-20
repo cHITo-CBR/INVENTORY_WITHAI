@@ -18,10 +18,22 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (state?.success) {
-      if (state.role === "admin") {
-        router.push("/admin/approvals");
-      } else {
-        router.push("/dashboard");
+      switch (state.role) {
+        case "admin":
+          router.push("/dashboard");
+          break;
+        case "salesman":
+          router.push("/sales");
+          break;
+        case "supervisor":
+          router.push("/inventory");
+          break;
+        case "buyer":
+          router.push("/catalog/products");
+          break;
+        default:
+          router.push("/dashboard");
+          break;
       }
     }
   }, [state, router]);
