@@ -17,6 +17,7 @@ import {
   Settings, 
   ShieldAlert, 
   ShoppingCart, 
+  ShoppingBag,
   Sparkles, 
   Tags, 
   Users, 
@@ -78,6 +79,12 @@ const operationsItems = [
   { title: "Inventory", url: "/inventory", icon: ClipboardList },
   { title: "Sales Transactions", url: "/sales", icon: ShoppingCart },
   { title: "Store Visits", url: "/visits", icon: MapPin },
+];
+
+const fieldSalesItems = [
+  { title: "Callsheets", url: "/callsheets", icon: FileText },
+  { title: "Buyer Requests", url: "/buyer-requests", icon: Package2 },
+  { title: "Bookings", url: "/bookings", icon: ShoppingBag },
 ];
 
 const analyticsItems = [
@@ -169,6 +176,28 @@ export function AppSidebar() {
           </SidebarGroupLabel>
           <SidebarMenu>
             {operationsItems.map((item) => (
+              <SidebarMenuItem key={item.title}>
+                <SidebarMenuButton 
+                  asChild 
+                  isActive={pathname === item.url || pathname.startsWith(item.url + '/')}
+                  className="font-medium text-gray-700 data-[active=true]:bg-[#E2EBE5] data-[active=true]:text-[#005914] data-[active=true]:font-bold hover:bg-gray-50"
+                >
+                  <Link href={item.url}>
+                    <item.icon className="w-5 h-5 mr-1" />
+                    <span>{item.title}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-[#005914] font-semibold text-xs tracking-wider uppercase mb-1">
+            Field Sales
+          </SidebarGroupLabel>
+          <SidebarMenu>
+            {fieldSalesItems.map((item) => (
               <SidebarMenuItem key={item.title}>
                 <SidebarMenuButton 
                   asChild 

@@ -113,3 +113,18 @@ export async function updateProduct(id: string, formData: FormData) {
   revalidatePath("/catalog/products");
   return { success: true };
 }
+
+export async function getProductVariants(): Promise<{ id: string; name: string; unit_price: number; sku: string | null }[]> {
+  try {
+    const { data, error } = await supabase
+      .from("product_variants")
+      .select("id, name, unit_price, sku")
+      .eq("is_active", true)
+      .order("name", { ascending: true });
+
+    if (error || !data) return [];
+    return data;
+  } catch {
+    return [];
+  }
+}

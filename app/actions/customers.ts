@@ -106,3 +106,19 @@ export async function getSalesmenForAssignment(): Promise<{ id: string; full_nam
     return [];
   }
 }
+
+export async function getSalesmanCustomers(salesmanId: string): Promise<CustomerRow[]> {
+  try {
+    const { data, error } = await supabase
+      .from("customers")
+      .select("id, store_name, contact_person, phone, email, address, city, region, is_active, created_at, users:assigned_salesman_id(full_name)")
+      .eq("assigned_salesman_id", salesmanId)
+      .eq("is_active", true)
+      .order("store_name", { ascending: true });
+
+    if (error || !data) return [];
+    return data as any as CustomerRow[];
+  } catch {
+    return [];
+  }
+}
