@@ -1,7 +1,7 @@
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { TopNav } from "@/components/layout/top-nav";
-import { getSession } from "@/lib/session";
+import { getCurrentUser } from "@/app/actions/auth";
 import { redirect } from "next/navigation";
 
 export default async function SalesmanLayout({
@@ -9,13 +9,13 @@ export default async function SalesmanLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getSession();
-  if (!session) {
+  const user = await getCurrentUser();
+  if (!user) {
     redirect("/login");
   }
 
   // Enforce salesman role
-  if (session.user.role !== "salesman") {
+  if (user.role !== "salesman") {
     redirect("/login");
   }
 

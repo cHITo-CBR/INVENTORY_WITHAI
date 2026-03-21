@@ -1,5 +1,5 @@
-import { supabase } from "@/lib/supabase";
-import { getSession } from "@/lib/session";
+import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/app/actions/auth";
 import { redirect } from "next/navigation";
 import AdminApprovalClient from "./AdminApprovalClient";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -10,9 +10,10 @@ import { LogOut } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function AdminApprovalsPage() {
-  const session = await getSession();
+  const supabase = await createClient();
+  const user = await getCurrentUser();
 
-  if (!session || session.user.role !== "admin") {
+  if (!user || user.role !== "admin") {
     redirect("/login");
   }
 

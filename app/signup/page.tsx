@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, Suspense } from "react";
 import { registerUser } from "@/app/actions/auth";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -13,9 +14,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import Image from "next/image";
 
-export default function SignupPage() {
+function SignupForm() {
   const [state, formAction, pending] = useActionState(registerUser, null);
   const [passwordError, setPasswordError] = useState("");
+  const searchParams = useSearchParams();
+  const isGooglePending = searchParams.get('success') === 'google_pending';
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -29,11 +32,11 @@ export default function SignupPage() {
     }
     
     setPasswordError("");
-    // Use startTransition to safely trigger the action
     formAction(formData);
   };
 
   const handleGoogleSignup = async () => {
+    const supabase = createClient();
     const origin = window.location.origin;
     await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -43,38 +46,22 @@ export default function SignupPage() {
     });
   };
 
-  if (state?.success) {
+  if (state?.success || isGooglePending) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F4F7F6] py-12 px-4 sm:px-6 lg:px-8 font-sans">
         <Card className="w-full max-w-md shadow-[0_8px_30px_rgb(0,0,0,0.04)] border-0 rounded-[24px] text-center p-6">
           <CardHeader className="space-y-4 flex flex-col items-center">
             <CheckCircle2 className="w-16 h-16 text-[#005914]" />
-            <CardTitle className="text-2xl font-bold text-[#005914]">Registration Successful!</CardTitle>
+            <CardTitle className="text-2xl font-bold text-[#005914]">
+              {isGooglePending ? "Google Registration Successful!" : "Registration Successful!"}
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-gray-600 font-medium">Waiting for admin approval. You will be able to log in once your account is active.</p>
-          </CardContent>
-          <CardFooter className="flex justify-center mt-4">
-            <Link href="/login" className="text-[#005914] hover:underline font-bold bg-[#E2EBE5] px-6 py-2.5 rounded-full">Return to Login</Link>
-          </CardFooter>
-        </Card>
-      </div>
-    );
-  }
-
-  // Check for google pending success state from query params via window
-  const isGooglePending = typeof window !== 'undefined' && window.location.search.includes('success=google_pending');
-
-  if (isGooglePending) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F4F7F6] py-12 px-4 sm:px-6 lg:px-8 font-sans">
-        <Card className="w-full max-w-md shadow-[0_8px_30px_rgb(0,0,0,0.04)] border-0 rounded-[24px] text-center p-6">
-          <CardHeader className="space-y-4 flex flex-col items-center">
-            <CheckCircle2 className="w-16 h-16 text-[#005914]" />
-            <CardTitle className="text-2xl font-bold text-[#005914]">Google Registration Successful!</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-gray-600 font-medium">Your Google account has been linked. Waiting for admin approval as a buyer. You will be able to log in once active.</p>
+            <p className="text-gray-600 font-medium">
+              {isGooglePending 
+                ? "Your Google account has been linked. Waiting for admin approval as a buyer. You will be able to log in once active."
+                : "Waiting for admin approval. You will be able to log in once your account is active."}
+            </p>
           </CardContent>
           <CardFooter className="flex justify-center mt-4">
             <Link href="/login" className="text-[#005914] hover:underline font-bold bg-[#E2EBE5] px-6 py-2.5 rounded-full">Return to Login</Link>
@@ -86,13 +73,12 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-screen flex py-10 px-4 sm:px-6 lg:px-8 font-sans relative overflow-hidden items-start justify-center overflow-y-auto bg-[#F4F7F6]">
-      {/* Subtle background gradient */}
       <div className="fixed top-0 left-0 right-0 h-96 bg-gradient-to-b from-[#E2EBE5] to-transparent opacity-50 z-0 pointer-events-none" />
       
       <div className="w-full max-w-[420px] bg-white rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] z-10 flex flex-col mt-4 md:mt-2 mb-10">
         <div className="px-8 pt-8 pb-8 flex-1">
           <div className="flex items-center gap-2 mb-8 font-bold text-[#005914] text-[15px]">
-            <Image src="/logo.png" alt="Century Pacific Food" width={140} height={32} className="h-8 w-auto object-contain" />
+            <Image src="/logo.png" alt="Century Pacific Food" width={140} height={32} className="h-8 w-auto object-contain" priority />
           </div>
 
           <div className="mb-6">
@@ -103,22 +89,16 @@ export default function SignupPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {state?.error && (
+            {(state?.error || passwordError) && (
               <Alert variant="destructive" className="py-2.5 px-3 rounded-lg bg-red-50 border-red-100 text-red-600">
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription className="text-xs">{state.error}</AlertDescription>
-              </Alert>
-            )}
-            
-            {passwordError && (
-              <Alert variant="destructive" className="py-2.5 px-3 rounded-lg bg-red-50 border-red-100 text-red-600">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription className="text-xs">{passwordError}</AlertDescription>
+                <AlertDescription className="text-xs">{state?.error || passwordError}</AlertDescription>
               </Alert>
             )}
 
             <div className="space-y-1.5">
               <Label htmlFor="fullName" className="text-[12px] font-semibold text-gray-700">Full Name</Label>
+              <input type="hidden" name="fullNameHidden" value="fullName" /> { /* Dummy to avoid warning if needed */ }
               <Input id="fullName" name="fullName" type="text" placeholder="Alexander Paci" required className="h-11 rounded-lg border-gray-300 focus-visible:ring-[#005914] px-4 shadow-sm" />
             </div>
 
@@ -127,13 +107,11 @@ export default function SignupPage() {
               <Input id="email" name="email" type="email" placeholder="curator@centurypaci.com" required className="h-11 rounded-lg border-gray-300 focus-visible:ring-[#005914] px-4 shadow-sm" />
             </div>
 
-            {/* Added Phone back to preserve functionality */}
             <div className="space-y-1.5">
               <Label htmlFor="phone" className="text-[12px] font-semibold text-gray-700">Phone</Label>
               <Input id="phone" name="phone" type="text" placeholder="+1234567890" className="h-11 rounded-lg border-gray-300 focus-visible:ring-[#005914] px-4 shadow-sm" />
             </div>
 
-            {/* Added Role dropdown back to preserve functionality */}
             <div className="space-y-1.5 z-50 relative">
               <Label htmlFor="role" className="text-[12px] font-semibold text-gray-700">Role</Label>
               <Select name="role" required defaultValue="buyer">
@@ -177,6 +155,7 @@ export default function SignupPage() {
             className="w-full h-12 bg-[#F3F4F6] border-0 rounded-full text-gray-700 font-semibold mb-6 hover:bg-gray-200 flex items-center justify-center gap-2" 
             type="button"
             onClick={handleGoogleSignup}
+            disabled={pending}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -202,14 +181,22 @@ export default function SignupPage() {
 
         <div className="bg-[#FAFAFA] px-8 py-5 border-t border-gray-100">
           <p className="text-[9px] text-gray-400 uppercase tracking-widest leading-relaxed mb-3">
-            © 2024 Century Paci Food. Precision Curation.
+            © 2024 Century Pacific Food. Precision Curation.
           </p>
           <div className="flex gap-6 text-[10px] font-bold text-gray-400 tracking-wider">
-            <Link href="#" className="hover:text-gray-600 transition-colors">SUPPORT</Link>
-            <Link href="#" className="hover:text-gray-600 transition-colors">SYSTEM STATUS</Link>
+            <Link href="#" className="hover:text-gray-600 transition-colors uppercase">Support</Link>
+            <Link href="#" className="hover:text-gray-600 transition-colors uppercase">System Status</Link>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <SignupForm />
+    </Suspense>
   );
 }

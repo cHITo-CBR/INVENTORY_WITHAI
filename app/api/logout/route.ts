@@ -1,7 +1,8 @@
-import { clearSession } from "@/lib/session";
+import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
 export async function POST() {
-  await clearSession();
+  const supabase = await createClient();
+  await supabase.auth.signOut();
   redirect("/login");
 }

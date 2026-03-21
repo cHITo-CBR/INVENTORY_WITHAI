@@ -52,8 +52,8 @@ export function CustomerSidebar() {
   const [user, setUser] = React.useState<{ full_name?: string; email?: string; role?: string } | null>(null);
 
   React.useEffect(() => {
-    getCurrentUser().then((session) => {
-      if (session?.user) setUser(session.user);
+    getCurrentUser().then((user) => {
+      if (user) setUser(user);
     });
   }, []);
 

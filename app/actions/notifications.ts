@@ -1,7 +1,7 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
-import { getSession } from "@/lib/session";
+import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/app/actions/auth";
 import { revalidatePath } from "next/cache";
 
 export interface NotificationRow {
@@ -15,13 +15,14 @@ export interface NotificationRow {
 
 export async function getNotifications(): Promise<NotificationRow[]> {
   try {
-    const session = await getSession();
-    if (!session) return [];
+    const supabase = await createClient();
+    const user = await getCurrentUser();
+    if (!user) return [];
 
     const { data, error } = await supabase
       .from("notifications")
       .select("id, title, message, type, is_read, created_at")
-      .eq("user_id", session.user.id)
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
     if (error || !data) return [];
@@ -33,13 +34,14 @@ export async function getNotifications(): Promise<NotificationRow[]> {
 
 export async function getUnreadCount(): Promise<number> {
   try {
-    const session = await getSession();
-    if (!session) return 0;
+    const supabase = await createClient();
+    const user = await getCurrentUser();
+    if (!user) return 0;
 
     const { count, error } = await supabase
       .from("notifications")
       .select("*", { count: "exact", head: true })
-      .eq("user_id", session.user.id)
+      .eq("user_id", user.id)
       .eq("is_read", false);
 
     if (error) return 0;
@@ -50,6 +52,7 @@ export async function getUnreadCount(): Promise<number> {
 }
 
 export async function markNotificationRead(id: string) {
+  const supabase = await createClient();
   const { error } = await supabase
     .from("notifications")
     .update({ is_read: true })
@@ -61,13 +64,14 @@ export async function markNotificationRead(id: string) {
 }
 
 export async function markAllRead() {
-  const session = await getSession();
-  if (!session) return { error: "Unauthorized" };
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+  if (!user) return { error: "Unauthorized" };
 
   const { error } = await supabase
     .from("notifications")
     .update({ is_read: true })
-    .eq("user_id", session.user.id)
+    .eq("user_id", user.id)
     .eq("is_read", false);
 
   if (error) return { error: error.message };

@@ -1,7 +1,7 @@
 import { CustomerSidebar } from "@/components/layout/customer-sidebar";
 import { TopNav } from "@/components/layout/top-nav";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
-import { getSession } from "@/lib/session";
+import { getCurrentUser } from "@/app/actions/auth";
 import { redirect } from "next/navigation";
 
 export default async function CustomerLayout({
@@ -9,13 +9,13 @@ export default async function CustomerLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getSession();
-  if (!session) {
+  const user = await getCurrentUser();
+  if (!user) {
     redirect("/login");
   }
 
   // Enforce buyer role
-  if (session.user.role !== "buyer") {
+  if (user.role !== "buyer") {
     redirect("/login");
   }
 

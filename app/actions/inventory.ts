@@ -1,7 +1,7 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
-import { getSession } from "@/lib/session";
+import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/app/actions/auth";
 import { revalidatePath } from "next/cache";
 
 export interface InventoryKPIs {
@@ -22,6 +22,7 @@ export interface MovementRow {
 
 export async function getInventoryKPIs(): Promise<InventoryKPIs> {
   try {
+    const supabase = await createClient();
     // Total distinct SKUs that have ledger entries
     const { count: totalSKUs } = await supabase
       .from("product_variants")
@@ -47,6 +48,7 @@ export async function getInventoryKPIs(): Promise<InventoryKPIs> {
 
 export async function getRecentMovements(): Promise<MovementRow[]> {
   try {
+    const supabase = await createClient();
     const { data, error } = await supabase
       .from("inventory_ledger")
       .select("id, quantity, balance, notes, created_at, product_variants:variant_id(name, sku), inventory_movement_types:movement_type_id(name, direction), users:recorded_by(full_name)")
@@ -61,12 +63,14 @@ export async function getRecentMovements(): Promise<MovementRow[]> {
 }
 
 export async function getMovementTypes(): Promise<{ id: number; name: string; direction: string }[]> {
+  const supabase = await createClient();
   const { data, error } = await supabase.from("inventory_movement_types").select("*").order("name");
   if (error || !data) return [];
   return data;
 }
 
 export async function getVariantsForAdjustment(): Promise<{ id: string; name: string; sku: string | null }[]> {
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("product_variants")
     .select("id, name, sku, products:product_id(name)")
@@ -83,8 +87,9 @@ export async function getVariantsForAdjustment(): Promise<{ id: string; name: st
 }
 
 export async function createStockAdjustment(formData: FormData) {
-  const session = await getSession();
-  if (!session) return { error: "Unauthorized" };
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+  if (!user) return { error: "Unauthorized" };
 
   const variantId = formData.get("variantId") as string;
   const movementTypeId = formData.get("movementTypeId") as string;
@@ -123,7 +128,7 @@ export async function createStockAdjustment(formData: FormData) {
       quantity: direction === "out" ? -quantity : quantity,
       balance: newBalance,
       notes: notes || null,
-      recorded_by: session.user.id,
+      recorded_by: user.id,
     },
   ]);
 

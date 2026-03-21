@@ -3,21 +3,30 @@
 import { useActionState, useEffect } from "react";
 import { loginUser } from "@/app/actions/auth";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { useRouter, useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, UtensilsCrossed } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import Image from "next/image";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [state, formAction, pending] = useActionState(loginUser, null);
+  
+  const error = state?.error || searchParams.get("error");
 
   useEffect(() => {
     if (state?.success) {
+      const next = searchParams.get("next");
+      if (next) {
+        router.push(next);
+        return;
+      }
+
       switch (state.role) {
         case "admin":
           router.push("/admin/dashboard");
@@ -36,28 +45,29 @@ export default function LoginPage() {
           break;
       }
     }
-  }, [state, router]);
+  }, [state, router, searchParams]);
 
   const handleGoogleLogin = async () => {
-    // Generate origin for the callback URL handling
+    const supabase = createClient();
     const origin = window.location.origin;
+    const next = searchParams.get("next") || "";
+    
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${origin}/auth/callback`,
+        redirectTo: `${origin}/auth/callback${next ? `?next=${encodeURIComponent(next)}` : ""}`,
       },
     });
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#F4F7F6] py-12 px-4 sm:px-6 lg:px-8 font-sans relative overflow-hidden">
-      {/* Decorative subtle background gradient */}
       <div className="absolute top-0 left-0 right-0 h-96 bg-gradient-to-b from-[#E2EBE5] to-transparent opacity-50 z-0 pointer-events-none" />
       
       <div className="w-full max-w-[420px] bg-white rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] z-10 overflow-hidden flex flex-col">
         <div className="px-8 pt-10 pb-8 flex-1">
           <div className="flex flex-col items-center mb-8">
-            <Image src="/logo.png" alt="Century Pacific Food" width={200} height={48} className="h-12 w-auto mb-4 object-contain" />
+            <Image src="/logo.png" alt="Century Pacific Food" width={200} height={48} className="h-12 w-auto mb-4 object-contain" priority />
           </div>
 
           <Button 
@@ -65,6 +75,7 @@ export default function LoginPage() {
             className="w-full h-12 rounded-full border-gray-200 text-gray-700 font-medium mb-6 hover:bg-gray-50 flex items-center justify-center gap-2" 
             type="button"
             onClick={handleGoogleLogin}
+            disabled={pending}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -85,10 +96,10 @@ export default function LoginPage() {
           </div>
 
           <form action={formAction} className="space-y-5">
-            {state?.error && (
+            {error && (
               <Alert variant="destructive" className="py-2.5 px-3 rounded-lg bg-red-50 border-red-100 text-red-600">
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription className="text-xs">{state.error}</AlertDescription>
+                <AlertDescription className="text-xs">{error}</AlertDescription>
               </Alert>
             )}
             
@@ -125,7 +136,7 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-8 text-center text-[13px] text-gray-500 font-medium">
-             New to the curator?{" "}
+             New here?{" "}
              <Link href="/signup" className="text-[#005914] hover:underline font-bold">
                Sign up
              </Link>
@@ -134,14 +145,14 @@ export default function LoginPage() {
 
         <div className="bg-[#FAFAFA] px-8 py-6 border-t border-gray-100">
           <div className="flex justify-center items-center gap-6 mb-4 text-[10px] font-bold text-gray-400 tracking-wider">
-            <Link href="#" className="hover:text-gray-600 transition-colors">PRIVACY POLICY</Link>
+            <Link href="#" className="hover:text-gray-600 transition-colors uppercase">Privacy Policy</Link>
             <div className="w-1 h-1 rounded-full bg-gray-300" />
-            <Link href="#" className="hover:text-gray-600 transition-colors">TERMS OF SERVICE</Link>
+            <Link href="#" className="hover:text-gray-600 transition-colors uppercase">Terms of Service</Link>
             <div className="w-1 h-1 rounded-full bg-gray-300" />
-            <Link href="#" className="hover:text-gray-600 transition-colors">SUPPORT</Link>
+            <Link href="#" className="hover:text-gray-600 transition-colors uppercase">Support</Link>
           </div>
           <p className="text-center text-[9px] text-gray-400 uppercase tracking-widest leading-relaxed">
-            © 2024 Century Paci Food. Precision Curation.
+            © 2024 Century Pacific Food. Precision Curation.
           </p>
         </div>
       </div>

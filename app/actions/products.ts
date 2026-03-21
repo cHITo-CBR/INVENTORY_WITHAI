@@ -1,6 +1,6 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 export interface ProductRow {
@@ -17,6 +17,7 @@ export interface ProductRow {
 
 export async function getProducts(search?: string): Promise<ProductRow[]> {
   try {
+    const supabase = await createClient();
     let query = supabase
       .from("products")
       .select("id, name, description, total_packaging, net_weight, is_active, created_at, product_categories:category_id(name), brands:brand_id(name)")
@@ -36,6 +37,7 @@ export async function getProducts(search?: string): Promise<ProductRow[]> {
 }
 
 export async function createProduct(formData: FormData) {
+  const supabase = await createClient();
   const name = formData.get("name") as string;
   const description = formData.get("description") as string;
   const categoryId = formData.get("categoryId") as string;
@@ -76,6 +78,7 @@ export async function createProduct(formData: FormData) {
 
 export async function getArchivedProducts(): Promise<ProductRow[]> {
   try {
+    const supabase = await createClient();
     const { data, error } = await supabase
       .from("products")
       .select("id, name, description, total_packaging, net_weight, is_active, created_at, product_categories:category_id(name), brands:brand_id(name)")
@@ -89,6 +92,7 @@ export async function getArchivedProducts(): Promise<ProductRow[]> {
 }
 
 export async function archiveProduct(id: string) {
+  const supabase = await createClient();
   const { error } = await supabase.from("products").update({ is_archived: true }).eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/catalog/products");
@@ -96,6 +100,7 @@ export async function archiveProduct(id: string) {
 }
 
 export async function restoreProduct(id: string) {
+  const supabase = await createClient();
   const { error } = await supabase.from("products").update({ is_archived: false }).eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/archives");
@@ -103,6 +108,7 @@ export async function restoreProduct(id: string) {
 }
 
 export async function updateProduct(id: string, formData: FormData) {
+  const supabase = await createClient();
   const name = formData.get("name") as string;
   const description = formData.get("description") as string;
   const categoryId = formData.get("categoryId") as string;
@@ -128,6 +134,7 @@ export async function updateProduct(id: string, formData: FormData) {
 
 export async function getProductVariants(): Promise<{ id: string; name: string; unit_price: number; sku: string | null }[]> {
   try {
+    const supabase = await createClient();
     const { data, error } = await supabase
       .from("product_variants")
       .select("id, name, unit_price, sku")

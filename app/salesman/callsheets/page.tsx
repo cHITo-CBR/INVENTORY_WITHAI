@@ -20,8 +20,8 @@ export default function SalesmanCallsheetsPage() {
 
   useEffect(() => {
     async function load() {
-      const session = await getCurrentUser();
-      const userId = session?.user?.id;
+      const user = await getCurrentUser();
+      const userId = user?.id;
       if (userId) {
         const result = await getSalesmanCallsheets(userId);
         setCallsheets(result.success ? result.data || [] : []);

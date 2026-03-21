@@ -1,6 +1,6 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/server";
 
 export type SearchResult = {
   id: string;
@@ -13,6 +13,7 @@ export type SearchResult = {
 export async function globalSearch(query: string): Promise<SearchResult[]> {
   if (!query || query.trim().length < 2) return [];
 
+  const supabase = await createClient();
   const searchTerm = `%${query.trim()}%`;
   const results: SearchResult[] = [];
 

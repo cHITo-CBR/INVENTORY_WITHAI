@@ -1,7 +1,7 @@
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { TopNav } from "@/components/layout/top-nav";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
-import { getSession } from "@/lib/session";
+import { getCurrentUser } from "@/app/actions/auth";
 import { redirect } from "next/navigation";
 
 export default async function AdminLayout({
@@ -9,13 +9,13 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getSession();
-  if (!session) {
+  const user = await getCurrentUser();
+  if (!user) {
     redirect("/login");
   }
 
   // Enforce admin role
-  if (session.user.role !== "admin") {
+  if (user.role !== "admin") {
     redirect("/login");
   }
 

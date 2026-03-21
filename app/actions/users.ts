@@ -1,7 +1,7 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
-import { getSession } from "@/lib/session";
+import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/app/actions/auth";
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 
@@ -18,12 +18,14 @@ export interface UserRow {
 
 export async function getUsers(search?: string, roleFilter?: string): Promise<UserRow[]> {
   try {
+    const supabase = await createClient();
     let query = supabase
       .from("users")
       .select("id, full_name, email, phone_number, status, is_active, created_at, roles(name)")
       .order("created_at", { ascending: false });
 
     if (roleFilter && roleFilter !== "all") {
+      const supabase = await createClient();
       const { data: roleData } = await supabase
         .from("roles")
         .select("id")
@@ -48,6 +50,7 @@ export async function getUsers(search?: string, roleFilter?: string): Promise<Us
 
 export async function getRoles(): Promise<{ id: number; name: string }[]> {
   try {
+    const supabase = await createClient();
     const { data, error } = await supabase.from("roles").select("id, name").order("name");
     if (error || !data) return [];
     return data;
@@ -57,8 +60,9 @@ export async function getRoles(): Promise<{ id: number; name: string }[]> {
 }
 
 export async function createUser(formData: FormData) {
-  const session = await getSession();
-  if (!session || session.user.role !== "admin") {
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+  if (!user || user.role !== "admin") {
     return { error: "Unauthorized" };
   }
 

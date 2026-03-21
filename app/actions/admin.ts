@@ -1,13 +1,14 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
-import { getSession } from "@/lib/session";
+import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/app/actions/auth";
 import { revalidatePath } from "next/cache";
 
 // Utility Server action to approve user
 export async function approveUser(userId: string) {
-  const session = await getSession();
-  if (!session || session.user.role !== "admin") {
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+  if (!user || user.role !== "admin") {
     return { error: "Unauthorized" };
   }
 
@@ -16,7 +17,7 @@ export async function approveUser(userId: string) {
     .update({
       status: "approved",
       is_active: true,
-      approved_by: session.user.id,
+      approved_by: user.id,
       approved_at: new Date().toISOString(),
     })
     .eq("id", userId);
@@ -31,8 +32,9 @@ export async function approveUser(userId: string) {
 
 // Utility Server action to reject user
 export async function rejectUser(userId: string, reason: string) {
-  const session = await getSession();
-  if (!session || session.user.role !== "admin") {
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+  if (!user || user.role !== "admin") {
     return { error: "Unauthorized" };
   }
 
