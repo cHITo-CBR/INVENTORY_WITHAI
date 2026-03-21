@@ -69,11 +69,17 @@ export async function getMovementTypes(): Promise<{ id: number; name: string; di
 export async function getVariantsForAdjustment(): Promise<{ id: string; name: string; sku: string | null }[]> {
   const { data, error } = await supabase
     .from("product_variants")
-    .select("id, name, sku")
+    .select("id, name, sku, products:product_id(name)")
     .eq("is_active", true)
     .order("name");
+    
   if (error || !data) return [];
-  return data;
+  
+  return data.map((v: any) => ({
+    id: v.id,
+    name: v.products ? `${v.products.name} - ${v.name}` : v.name,
+    sku: v.sku,
+  }));
 }
 
 export async function createStockAdjustment(formData: FormData) {
@@ -122,7 +128,9 @@ export async function createStockAdjustment(formData: FormData) {
   ]);
 
   if (error) return { error: error.message };
-
+  
+  revalidatePath("/admin/inventory");
+  revalidatePath("/supervisor/inventory");
   revalidatePath("/inventory");
   return { success: true };
 }

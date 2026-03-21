@@ -35,7 +35,7 @@ export default function SalesmanVisitsPage() {
   }
 
   return (
-    <div className="space-y-5 max-w-2xl mx-auto">
+    <div className="space-y-5 max-w-7xl mx-auto">
       <div>
         <h2 className="text-xl font-black text-gray-900 tracking-tight">Store Visits</h2>
         <p className="text-xs text-gray-400 font-medium">{visits.length} visits recorded</p>

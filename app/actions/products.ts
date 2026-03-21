@@ -45,7 +45,7 @@ export async function createProduct(formData: FormData) {
 
   if (!name) return { error: "Product name is required." };
 
-  const { error } = await supabase.from("products").insert([
+  const { data, error } = await supabase.from("products").insert([
     {
       name,
       description: description || null,
@@ -54,11 +54,23 @@ export async function createProduct(formData: FormData) {
       total_packaging: totalPackaging || null,
       net_weight: netWeight || null,
     },
-  ]);
+  ]).select("id").single();
 
   if (error) return { error: error.message };
 
+  // Automatically create a default variant for the new product
+  await supabase.from("product_variants").insert([
+    {
+      product_id: data.id,
+      name: "Standard",
+      sku: `SKU-${name.substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000)}`,
+      unit_price: 0,
+      is_active: true,
+    },
+  ]);
+
   revalidatePath("/catalog/products");
+  revalidatePath("/admin/catalog/products");
   return { success: true };
 }
 

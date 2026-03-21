@@ -139,7 +139,7 @@ export function AppSidebar({ basePath = "/admin" }: AppSidebarProps) {
             {navItems
               .filter((item) => {
                 if (user?.role !== "admin" && item.adminOnly) return false;
-                if (item.path === "/dashboard" && user?.role !== "admin" && user?.role !== "supervisor") return false;
+                if (item.path === "/dashboard" && user?.role !== "admin" && user?.role !== "supervisor" && user?.role !== "salesman") return false;
                 return true;
               })
               .map((item) => {

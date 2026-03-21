@@ -42,7 +42,7 @@ export default function SalesmanRequestsPage() {
   }
 
   return (
-    <div className="space-y-5 max-w-2xl mx-auto">
+    <div className="space-y-5 max-w-7xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-black text-gray-900 tracking-tight">Buyer Requests</h2>

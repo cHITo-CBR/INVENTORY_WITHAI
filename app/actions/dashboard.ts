@@ -24,7 +24,7 @@ export interface LowStockItem {
   balance: number;
 }
 
-async function safeCount(table: string, filter?: { column: string; value: string }): Promise<number> {
+async function safeCount(table: string, filter?: { column: string; value: string | number }): Promise<number> {
   try {
     let query = supabase.from(table).select("*", { count: "exact", head: true });
     if (filter) {
@@ -42,7 +42,7 @@ export async function getDashboardKPIs(): Promise<DashboardKPIs> {
   const [totalUsers, pendingApprovals, totalCustomers, totalProducts] = await Promise.all([
     safeCount("users"),
     safeCount("users", { column: "status", value: "pending" }),
-    safeCount("customers"),
+    safeCount("users", { column: "role_id", value: 4 }), // Role ID 4 is for 'buyer'
     safeCount("products"),
   ]);
 

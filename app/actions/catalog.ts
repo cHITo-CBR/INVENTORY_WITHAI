@@ -48,7 +48,9 @@ export async function archiveCategory(id: number) {
 export async function restoreCategory(id: number) {
   const { error } = await supabase.from("product_categories").update({ is_archived: false }).eq("id", id);
   if (error) return { error: error.message };
+  revalidatePath("/admin/catalog/categories");
   revalidatePath("/catalog/categories");
+  revalidatePath("/admin/archives");
   revalidatePath("/archives");
   return { success: true };
 }
@@ -105,7 +107,9 @@ export async function archiveBrand(id: number) {
 export async function restoreBrand(id: number) {
   const { error } = await supabase.from("brands").update({ is_archived: false }).eq("id", id);
   if (error) return { error: error.message };
+  revalidatePath("/admin/catalog/brands");
   revalidatePath("/catalog/brands");
+  revalidatePath("/admin/archives");
   revalidatePath("/archives");
   return { success: true };
 }
@@ -162,7 +166,9 @@ export async function archiveUnit(id: number) {
 export async function restoreUnit(id: number) {
   const { error } = await supabase.from("units").update({ is_archived: false }).eq("id", id);
   if (error) return { error: error.message };
+  revalidatePath("/admin/catalog/units");
   revalidatePath("/catalog/units");
+  revalidatePath("/admin/archives");
   revalidatePath("/archives");
   return { success: true };
 }
@@ -219,7 +225,9 @@ export async function archivePackagingType(id: number) {
 export async function restorePackagingType(id: number) {
   const { error } = await supabase.from("packaging_types").update({ is_archived: false }).eq("id", id);
   if (error) return { error: error.message };
+  revalidatePath("/admin/catalog/packaging");
   revalidatePath("/catalog/packaging");
+  revalidatePath("/admin/archives");
   revalidatePath("/archives");
   return { success: true };
 }

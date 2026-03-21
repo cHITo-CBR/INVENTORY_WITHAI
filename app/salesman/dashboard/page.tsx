@@ -82,7 +82,7 @@ export default function SalesmanDashboardPage() {
   ];
 
   return (
-    <div className="space-y-6 max-w-2xl mx-auto">
+    <div className="space-y-5 max-w-7xl mx-auto">
 
       {/* ═══ Hero Greeting ═══ */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#005914] via-[#007a1f] to-emerald-500 p-6 text-white shadow-2xl shadow-green-900/30">

@@ -43,7 +43,7 @@ export default function SalesmanCustomersPage() {
   }
 
   return (
-    <div className="space-y-5 max-w-2xl mx-auto">
+    <div className="space-y-5 max-w-7xl mx-auto">
       {/* Header */}
       <div>
         <h2 className="text-xl font-black text-gray-900 tracking-tight">Store Directory</h2>
