@@ -147,11 +147,16 @@ export async function getCurrentUser() {
     const { data: { user }, error } = await supabase.auth.getUser();
     if (error || !user) return null;
 
-    return {
+    const userData = {
       id: user.id,
       email: user.email,
       role: user.user_metadata?.role,
       full_name: user.user_metadata?.full_name
+    };
+
+    return {
+      ...userData,
+      user: userData
     };
   } catch (err) {
     console.error("Get current user error:", err);

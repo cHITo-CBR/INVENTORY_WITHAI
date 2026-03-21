@@ -23,7 +23,7 @@ const roleRouteMap: Record<string, string> = {
 
 const publicRoutes = ["/login", "/signup", "/auth"];
 
-export async function middleware(request: NextRequest) {
+async function updateSession(request: NextRequest) {
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -114,6 +114,10 @@ export async function middleware(request: NextRequest) {
   }
 
   return response
+}
+
+export async function proxy(request: NextRequest) {
+  return await updateSession(request);
 }
 
 export const config = {

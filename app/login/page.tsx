@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, Suspense } from "react";
 import { loginUser } from "@/app/actions/auth";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -12,7 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import Image from "next/image";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [state, formAction, pending] = useActionState(loginUser, null);
@@ -148,14 +148,20 @@ export default function LoginPage() {
             <Link href="#" className="hover:text-gray-600 transition-colors uppercase">Privacy Policy</Link>
             <div className="w-1 h-1 rounded-full bg-gray-300" />
             <Link href="#" className="hover:text-gray-600 transition-colors uppercase">Terms of Service</Link>
-            <div className="w-1 h-1 rounded-full bg-gray-300" />
-            <Link href="#" className="hover:text-gray-600 transition-colors uppercase">Support</Link>
           </div>
-          <p className="text-center text-[9px] text-gray-400 uppercase tracking-widest leading-relaxed">
-            © 2024 Century Pacific Food. Precision Curation.
+          <p className="text-[10px] text-gray-400 uppercase tracking-[0.2em] font-bold text-center leading-loose">
+            © 2024 Century Pacific Food. <br/> All rights reserved.
           </p>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-[#F4F7F6]">Loading...</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }
