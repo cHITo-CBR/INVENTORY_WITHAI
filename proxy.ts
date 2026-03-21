@@ -30,90 +30,113 @@ async function updateSession(request: NextRequest) {
     },
   })
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
+  try {
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll()
+          },
+          setAll(cookiesToSet) {
+            try {
+              cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+              response = NextResponse.next({
+                request: {
+                  headers: request.headers,
+                },
+              })
+              cookiesToSet.forEach(({ name, value, options }) =>
+                response.cookies.set(name, value, options)
+              )
+            } catch (error) {
+              console.error("Proxy cookie error:", error)
+            }
+          },
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
-          )
-        },
-      },
+      }
+    )
+
+    // This will refresh session if expired - vital for Vercel deployment
+    const { data: { user } } = await supabase.auth.getUser()
+    const { pathname } = request.nextUrl
+
+    // 1. Skip static assets, favicon, and images
+    if (
+      pathname.includes('.') ||
+      pathname.startsWith('/_next') ||
+      pathname.startsWith('/api')
+    ) {
+      return response
     }
-  )
 
-  // This will refresh session if expired - vital for Vercel deployment
-  const { data: { user } } = await supabase.auth.getUser()
-  const { pathname } = request.nextUrl
+    const isPublic = publicRoutes.some((r) => pathname.startsWith(r))
+    const userRole = user?.user_metadata?.role as string | undefined
 
-  // 1. Skip static assets, favicon, and images
-  if (
-    pathname.includes('.') ||
-    pathname.startsWith('/_next') ||
-    pathname.startsWith('/api')
-  ) {
-    return response
-  }
-
-  const isPublic = publicRoutes.some((r) => pathname.startsWith(r))
-  const userRole = user?.user_metadata?.role as string | undefined
-
-  // 2. Handle Root Path
-  if (pathname === "/") {
-    if (user && userRole && roleDashboardMap[userRole]) {
-      return NextResponse.redirect(new URL(roleDashboardMap[userRole], request.url))
-    }
-    return NextResponse.redirect(new URL("/login", request.url))
-  }
-
-  // 3. Handle Public Routes (Already logged in? Redirect to dashboard)
-  if (isPublic) {
-    if (user && (pathname === "/login" || pathname === "/signup")) {
-      if (userRole && roleDashboardMap[userRole]) {
+    // 2. Handle Root Path
+    if (pathname === "/") {
+      if (user && userRole && roleDashboardMap[userRole]) {
         return NextResponse.redirect(new URL(roleDashboardMap[userRole], request.url))
       }
+      return NextResponse.redirect(new URL("/login", request.url))
     }
-    return response
-  }
 
-  // 4. Protect Private Routes (No user? Redirect to login)
-  if (!user) {
-    const searchParams = new URLSearchParams(request.nextUrl.search)
-    searchParams.set('next', pathname)
-    return NextResponse.redirect(new URL(`/login?${searchParams.toString()}`, request.url))
-  }
+    // 3. Handle Public Routes (Already logged in? Redirect to dashboard)
+    if (isPublic) {
+      if (user && (pathname === "/login" || pathname === "/signup")) {
+        if (userRole && roleDashboardMap[userRole]) {
+          return NextResponse.redirect(new URL(roleDashboardMap[userRole], request.url))
+        }
+      }
+      return response
+    }
 
-  // 5. Enforce Role-Based Access
-  const isStakeholderRoute = Object.values(roleRouteMap).some((prefix) =>
-    pathname.startsWith(prefix)
-  )
+    // 4. Protect Private Routes (No user? Redirect to login)
+    if (!user) {
+      const searchParams = new URLSearchParams(request.nextUrl.search)
+      if (pathname !== '/login') {
+        searchParams.set('next', pathname)
+      }
+      return NextResponse.redirect(new URL(`/login?${searchParams.toString()}`, request.url))
+    }
 
-  if (isStakeholderRoute) {
-    const allowedPrefix = userRole ? roleRouteMap[userRole] : null
-    
-    // Check if user is on a route they aren't allowed to be on
-    if (!allowedPrefix || !pathname.startsWith(allowedPrefix)) {
-      // Wrong role for this route -> redirect to their own dashboard
-      const redirectUrl = (userRole && roleDashboardMap[userRole]) 
-        ? roleDashboardMap[userRole] 
-        : "/login";
+    // 5. Enforce Role-Based Access
+    const isStakeholderRoute = Object.values(roleRouteMap).some((prefix) =>
+      pathname.startsWith(prefix)
+    )
+
+    if (isStakeholderRoute) {
+      const allowedPrefix = userRole ? roleRouteMap[userRole] : null
       
-      return NextResponse.redirect(new URL(redirectUrl, request.url))
+      // Check if user is on a route they aren't allowed to be on
+      if (!allowedPrefix || !pathname.startsWith(allowedPrefix)) {
+        // Wrong role for this route -> redirect to their own dashboard
+        const redirectUrl = (userRole && roleDashboardMap[userRole]) 
+          ? roleDashboardMap[userRole] 
+          : "/login";
+        
+        return NextResponse.redirect(new URL(redirectUrl, request.url))
+      }
     }
-  }
 
-  return response
+    return response;
+  } catch (err) {
+    console.error("Proxy error (503 prevention):", err);
+    // If Supabase crashes, default strategy is to allow static & public routes, restrict private.
+    const { pathname } = request.nextUrl;
+    if (
+      pathname.includes('.') ||
+      pathname.startsWith('/_next') ||
+      pathname.startsWith('/api') ||
+      publicRoutes.some((r) => pathname.startsWith(r))
+    ) {
+      return response;
+    }
+    
+    // Fallback: Redirect to root/login to prevent a hard 503 HTTP status.
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
 }
 
 export async function proxy(request: NextRequest) {
