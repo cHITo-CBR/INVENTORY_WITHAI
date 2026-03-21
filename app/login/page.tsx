@@ -20,19 +20,19 @@ export default function LoginPage() {
     if (state?.success) {
       switch (state.role) {
         case "admin":
-          router.push("/dashboard");
+          router.push("/admin/dashboard");
           break;
         case "salesman":
-          router.push("/sales");
+          router.push("/salesman/dashboard");
           break;
         case "supervisor":
-          router.push("/inventory");
+          router.push("/supervisor/dashboard");
           break;
         case "buyer":
-          router.push("/catalog/products");
+          router.push("/customers/catalog/products");
           break;
         default:
-          router.push("/dashboard");
+          router.push("/login");
           break;
       }
     }

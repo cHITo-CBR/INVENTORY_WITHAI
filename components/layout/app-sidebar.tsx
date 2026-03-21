@@ -43,63 +43,51 @@ import Image from "next/image";
 import { Scale } from "lucide-react";
 import { getCurrentUser } from "@/app/actions/auth";
 
+interface AppSidebarProps {
+  basePath?: string; // e.g. "/admin", "/supervisor"
+}
+
+// Navigation items defined with relative paths (no leading prefix)
 const navItems = [
-  {
-    title: "Overview",
-    url: "/dashboard",
-    icon: LayoutDashboard,
-  },
-  {
-    title: "Account Approvals",
-    url: "/admin/approvals",
-    icon: CheckSquare,
-  },
-  {
-    title: "User Management",
-    url: "/users",
-    icon: ShieldAlert,
-  },
-  {
-    title: "Customers",
-    url: "/customers",
-    icon: Users,
-  },
+  { title: "Overview", path: "/dashboard", icon: LayoutDashboard },
+  { title: "Account Approvals", path: "/approvals", icon: CheckSquare, adminOnly: true },
+  { title: "User Management", path: "/users", icon: ShieldAlert, adminOnly: true },
+  { title: "Customers", path: "/customers", icon: Users },
 ];
 
 const catalogItems = [
-  { title: "Products", url: "/catalog/products", icon: Package },
-  { title: "Categories", url: "/catalog/categories", icon: Box },
-  { title: "Brands", url: "/catalog/brands", icon: Tags },
-  { title: "Units", url: "/catalog/units", icon: Scale }, // Note: Scale is not imported, use something else? 
-  { title: "Packaging Types", url: "/catalog/packaging", icon: Box },
+  { title: "Products", path: "/catalog/products", icon: Package },
+  { title: "Categories", path: "/catalog/categories", icon: Box },
+  { title: "Brands", path: "/catalog/brands", icon: Tags },
+  { title: "Units", path: "/catalog/units", icon: Scale },
+  { title: "Packaging Types", path: "/catalog/packaging", icon: Box },
 ];
-// Fix icon imports
 
 const operationsItems = [
-  { title: "Inventory", url: "/inventory", icon: ClipboardList },
-  { title: "Sales Transactions", url: "/sales", icon: ShoppingCart },
-  { title: "Store Visits", url: "/visits", icon: MapPin },
+  { title: "Inventory", path: "/inventory", icon: ClipboardList },
+  { title: "Sales Transactions", path: "/sales", icon: ShoppingCart },
+  { title: "Store Visits", path: "/visits", icon: MapPin },
 ];
 
 const fieldSalesItems = [
-  { title: "Callsheets", url: "/callsheets", icon: FileText },
-  { title: "Buyer Requests", url: "/buyer-requests", icon: Package2 },
-  { title: "Bookings", url: "/bookings", icon: ShoppingBag },
+  { title: "Callsheets", path: "/callsheets", icon: FileText },
+  { title: "Buyer Requests", path: "/buyer-requests", icon: Package2 },
+  { title: "Bookings", path: "/bookings", icon: ShoppingBag },
 ];
 
 const analyticsItems = [
-  { title: "Reports", url: "/reports", icon: BarChart3 },
-  { title: "AI Insights", url: "/reports/ai-insights", icon: Sparkles },
+  { title: "Reports", path: "/reports", icon: BarChart3 },
+  { title: "AI Insights", path: "/reports/ai-insights", icon: Sparkles },
 ];
 
 const systemItems = [
-  { title: "Notifications", url: "/notifications", icon: Bell },
-  { title: "Audit Logs", url: "/audit", icon: FileText },
-  { title: "Archives", url: "/archives", icon: Archive },
-  { title: "Settings", url: "/settings", icon: Settings },
+  { title: "Notifications", path: "/notifications", icon: Bell },
+  { title: "Audit Logs", path: "/audit", icon: FileText },
+  { title: "Archives", path: "/archives", icon: Archive },
+  { title: "Settings", path: "/settings", icon: Settings },
 ];
 
-export function AppSidebar() {
+export function AppSidebar({ basePath = "/admin" }: AppSidebarProps) {
   const pathname = usePathname();
   const [user, setUser] = React.useState<{ full_name?: string; email?: string; role?: string } | null>(null);
 
@@ -111,10 +99,33 @@ export function AppSidebar() {
     });
   }, []);
 
+  // Helper to prefix all paths with the basePath
+  const prefixed = (path: string) => `${basePath}${path}`;
+
+  const renderMenuItems = (items: typeof navItems) =>
+    items.map((item) => {
+      const url = prefixed(item.path);
+      const isActive = pathname === url || pathname.startsWith(url + "/");
+      return (
+        <SidebarMenuItem key={item.title}>
+          <SidebarMenuButton 
+            asChild 
+            isActive={isActive}
+            className="font-medium text-gray-700 data-[active=true]:bg-[#E2EBE5] data-[active=true]:text-[#005914] data-[active=true]:font-bold hover:bg-gray-50"
+          >
+            <Link href={url}>
+              <item.icon className="w-5 h-5 mr-1" />
+              <span>{item.title}</span>
+            </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      );
+    });
+
   return (
     <Sidebar variant="inset" className="border-r border-gray-200">
       <SidebarHeader className="bg-white px-4 py-4 md:py-6">
-        <Link href="/dashboard" className="flex items-center gap-2">
+        <Link href={prefixed("/dashboard")} className="flex items-center gap-2">
           <Image src="/logo.png" alt="Century Pacific Food" width={140} height={32} className="h-8 w-auto object-contain" />
         </Link>
       </SidebarHeader>
@@ -125,26 +136,30 @@ export function AppSidebar() {
             Main
           </SidebarGroupLabel>
           <SidebarMenu>
-            {navItems.filter(item => {
-              if (user?.role !== "admin") {
-                if (item.url === "/admin/approvals" || item.url === "/users") return false;
-                if (item.url === "/dashboard" && user?.role !== "supervisor") return false;
-              }
-              return true;
-            }).map((item) => (
-              <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton 
-                  asChild 
-                  isActive={pathname === item.url || pathname.startsWith(item.url + '/')}
-                  className="font-medium text-gray-700 data-[active=true]:bg-[#E2EBE5] data-[active=true]:text-[#005914] data-[active=true]:font-bold hover:bg-gray-50"
-                >
-                  <Link href={item.url}>
-                    <item.icon className="w-5 h-5 mr-1" />
-                    <span>{item.title}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
+            {navItems
+              .filter((item) => {
+                if (user?.role !== "admin" && item.adminOnly) return false;
+                if (item.path === "/dashboard" && user?.role !== "admin" && user?.role !== "supervisor") return false;
+                return true;
+              })
+              .map((item) => {
+                const url = prefixed(item.path);
+                const isActive = pathname === url || pathname.startsWith(url + "/");
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton 
+                      asChild 
+                      isActive={isActive}
+                      className="font-medium text-gray-700 data-[active=true]:bg-[#E2EBE5] data-[active=true]:text-[#005914] data-[active=true]:font-bold hover:bg-gray-50"
+                    >
+                      <Link href={url}>
+                        <item.icon className="w-5 h-5 mr-1" />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
           </SidebarMenu>
         </SidebarGroup>
 
@@ -152,66 +167,21 @@ export function AppSidebar() {
           <SidebarGroupLabel className="text-[#005914] font-semibold text-xs tracking-wider uppercase mb-1">
             Product Catalog
           </SidebarGroupLabel>
-          <SidebarMenu>
-            {catalogItems.map((item) => (
-              <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton 
-                  asChild 
-                  isActive={pathname === item.url || pathname.startsWith(item.url + '/')}
-                  className="font-medium text-gray-700 data-[active=true]:bg-[#E2EBE5] data-[active=true]:text-[#005914] data-[active=true]:font-bold hover:bg-gray-50"
-                >
-                  <Link href={item.url}>
-                    <item.icon className="w-5 h-5 mr-1" />
-                    <span>{item.title}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
+          <SidebarMenu>{renderMenuItems(catalogItems)}</SidebarMenu>
         </SidebarGroup>
 
         <SidebarGroup>
           <SidebarGroupLabel className="text-[#005914] font-semibold text-xs tracking-wider uppercase mb-1">
             Operations
           </SidebarGroupLabel>
-          <SidebarMenu>
-            {operationsItems.map((item) => (
-              <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton 
-                  asChild 
-                  isActive={pathname === item.url || pathname.startsWith(item.url + '/')}
-                  className="font-medium text-gray-700 data-[active=true]:bg-[#E2EBE5] data-[active=true]:text-[#005914] data-[active=true]:font-bold hover:bg-gray-50"
-                >
-                  <Link href={item.url}>
-                    <item.icon className="w-5 h-5 mr-1" />
-                    <span>{item.title}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
+          <SidebarMenu>{renderMenuItems(operationsItems)}</SidebarMenu>
         </SidebarGroup>
 
         <SidebarGroup>
           <SidebarGroupLabel className="text-[#005914] font-semibold text-xs tracking-wider uppercase mb-1">
             Field Sales
           </SidebarGroupLabel>
-          <SidebarMenu>
-            {fieldSalesItems.map((item) => (
-              <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton 
-                  asChild 
-                  isActive={pathname === item.url || pathname.startsWith(item.url + '/')}
-                  className="font-medium text-gray-700 data-[active=true]:bg-[#E2EBE5] data-[active=true]:text-[#005914] data-[active=true]:font-bold hover:bg-gray-50"
-                >
-                  <Link href={item.url}>
-                    <item.icon className="w-5 h-5 mr-1" />
-                    <span>{item.title}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
+          <SidebarMenu>{renderMenuItems(fieldSalesItems)}</SidebarMenu>
         </SidebarGroup>
 
         {user?.role === "admin" && (
@@ -219,22 +189,7 @@ export function AppSidebar() {
             <SidebarGroupLabel className="text-[#005914] font-semibold text-xs tracking-wider uppercase mb-1">
               Analytics & System
             </SidebarGroupLabel>
-            <SidebarMenu>
-              {[...analyticsItems, ...systemItems].map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton 
-                    asChild 
-                    isActive={pathname === item.url || pathname.startsWith(item.url + '/')}
-                    className="font-medium text-gray-700 data-[active=true]:bg-[#E2EBE5] data-[active=true]:text-[#005914] data-[active=true]:font-bold hover:bg-gray-50"
-                  >
-                    <Link href={item.url}>
-                      <item.icon className="w-5 h-5 mr-1" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
+            <SidebarMenu>{renderMenuItems([...analyticsItems, ...systemItems])}</SidebarMenu>
           </SidebarGroup>
         )}
       </SidebarContent>

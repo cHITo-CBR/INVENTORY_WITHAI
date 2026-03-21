@@ -126,7 +126,7 @@ export default function AdminDashboardPage() {
         <Card className="shadow-sm border-0 rounded-xl">
           <CardHeader className="py-4 border-b border-gray-100 flex flex-row items-center justify-between bg-white rounded-t-xl">
             <CardTitle className="text-lg font-semibold text-gray-800">Recent Sales Transactions</CardTitle>
-            <Link href="/sales">
+            <Link href="/supervisor/sales">
               <Button variant="ghost" size="sm" className="text-[#005914]">View All</Button>
             </Link>
           </CardHeader>
@@ -168,7 +168,7 @@ export default function AdminDashboardPage() {
         <Card className="shadow-sm border-0 rounded-xl">
           <CardHeader className="py-4 border-b border-gray-100 flex flex-row items-center justify-between bg-white rounded-t-xl">
             <CardTitle className="text-lg font-semibold text-gray-800">Low Stock Alerts</CardTitle>
-            <Link href="/inventory">
+            <Link href="/supervisor/inventory">
               <Button variant="ghost" size="sm" className="text-[#005914]">View Inventory</Button>
             </Link>
           </CardHeader>
