@@ -52,6 +52,7 @@ const navItems = [
   { title: "Overview", path: "/dashboard", icon: LayoutDashboard },
   { title: "Account Approvals", path: "/approvals", icon: CheckSquare, adminOnly: true },
   { title: "User Management", path: "/users", icon: ShieldAlert, adminOnly: true },
+  { title: "Team Monitoring", path: "/team", icon: Users, supervisorOnly: true },
   { title: "Customers", path: "/customers", icon: Users },
 ];
 
@@ -77,14 +78,15 @@ const fieldSalesItems = [
 
 const analyticsItems = [
   { title: "Reports", path: "/reports", icon: BarChart3 },
-  { title: "AI Insights", path: "/reports/ai-insights", icon: Sparkles },
+  { title: "AI Insights", path: "/reports/ai-insights", icon: Sparkles, adminOnly: true },
 ];
 
 const systemItems = [
   { title: "Notifications", path: "/notifications", icon: Bell },
-  { title: "Audit Logs", path: "/audit", icon: FileText },
-  { title: "Archives", path: "/archives", icon: Archive },
+  { title: "Audit Logs", path: "/audit", icon: FileText, adminOnly: true },
+  { title: "Archives", path: "/archives", icon: Archive, adminOnly: true },
   { title: "Settings", path: "/settings", icon: Settings },
+  { title: "Profile", path: "/profile", icon: Users, supervisorOnly: true },
 ];
 
 export function AppSidebar({ basePath = "/admin" }: AppSidebarProps) {
@@ -138,7 +140,8 @@ export function AppSidebar({ basePath = "/admin" }: AppSidebarProps) {
           <SidebarMenu>
             {navItems
               .filter((item) => {
-                if (user?.role !== "admin" && item.adminOnly) return false;
+                if (user?.role !== "admin" && (item as any).adminOnly) return false;
+                if (user?.role !== "supervisor" && (item as any).supervisorOnly) return false;
                 if (item.path === "/dashboard" && user?.role !== "admin" && user?.role !== "supervisor" && user?.role !== "salesman") return false;
                 return true;
               })
@@ -184,12 +187,37 @@ export function AppSidebar({ basePath = "/admin" }: AppSidebarProps) {
           <SidebarMenu>{renderMenuItems(fieldSalesItems)}</SidebarMenu>
         </SidebarGroup>
 
-        {user?.role === "admin" && (
+        {(user?.role === "admin" || user?.role === "supervisor") && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-[#005914] font-semibold text-xs tracking-wider uppercase mb-1">
               Analytics & System
             </SidebarGroupLabel>
-            <SidebarMenu>{renderMenuItems([...analyticsItems, ...systemItems])}</SidebarMenu>
+            <SidebarMenu>
+              {[...analyticsItems, ...systemItems]
+                .filter((item) => {
+                  if (user?.role !== "admin" && (item as any).adminOnly) return false;
+                  if (user?.role !== "supervisor" && (item as any).supervisorOnly) return false;
+                  return true;
+                })
+                .map((item) => {
+                  const url = prefixed(item.path);
+                  const isActive = pathname === url || pathname.startsWith(url + "/");
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive}
+                        className="font-medium text-gray-700 data-[active=true]:bg-[#E2EBE5] data-[active=true]:text-[#005914] data-[active=true]:font-bold hover:bg-gray-50"
+                      >
+                        <Link href={url}>
+                          <item.icon className="w-5 h-5 mr-1" />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+            </SidebarMenu>
           </SidebarGroup>
         )}
       </SidebarContent>

@@ -1,158 +1,83 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Inbox, CheckCircle, XCircle, Package } from "lucide-react";
-import { getAllBuyerRequests, updateBuyerRequestStatus } from "@/app/actions/buyer-requests";
+import { Loader2, FileText, Plus, Inbox } from "lucide-react";
+import Link from "next/link";
+import { getCurrentUser } from "@/app/actions/auth";
+import { getBuyerOwnRequests } from "@/app/actions/buyer-actions";
 
-function EmptyState({ message }: { message: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-10 text-gray-400">
-      <Inbox className="w-10 h-10 mb-2" />
-      <p className="text-sm font-medium">{message}</p>
-    </div>
-  );
-}
-
-const statusStyles: Record<string, string> = {
-  pending: "bg-blue-50 text-blue-700",
+const statusColors: Record<string, string> = {
+  pending: "bg-yellow-50 text-yellow-700",
+  open: "bg-blue-50 text-blue-700",
+  contacted: "bg-indigo-50 text-indigo-700",
+  converted: "bg-green-50 text-green-700",
   fulfilled: "bg-green-50 text-green-700",
-  rejected: "bg-red-50 text-red-700",
+  declined: "bg-red-50 text-red-700",
+  closed: "bg-gray-100 text-gray-700",
 };
 
-export default function AdminBuyerRequestsPage() {
+export default function BuyerRequestsPage() {
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<string | null>(null);
 
-  async function load() {
-    const data = await getAllBuyerRequests();
-    setRequests(data);
-    setLoading(false);
-  }
+  useEffect(() => {
+    async function load() {
+      const session = await getCurrentUser();
+      if (session?.user) {
+        const data = await getBuyerOwnRequests(session.user.id);
+        setRequests(data);
+      }
+      setLoading(false);
+    }
+    load();
+  }, []);
 
-  useEffect(() => { load(); }, []);
-
-  async function handleStatusChange(id: string, status: string) {
-    setActionLoading(id);
-    await updateBuyerRequestStatus(id, status);
-    await load();
-    setActionLoading(null);
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-[#005914]" />
-      </div>
-    );
-  }
+  if (loading) return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="w-8 h-8 animate-spin text-[#005914]" /></div>;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Buyer Requests</h1>
-        <p className="text-gray-500 text-sm">Review product requests submitted by salesmen on behalf of customers.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">My Requests</h1>
+          <p className="text-gray-500 text-sm">{requests.length} requests submitted</p>
+        </div>
+        <Link href="/customers/buyer-requests/new">
+          <Button className="bg-[#005914] hover:bg-[#004010] text-white rounded-xl gap-2">
+            <Plus className="w-4 h-4" /> New Request
+          </Button>
+        </Link>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: "Pending", value: requests.filter(r => r.status === "pending").length, color: "text-blue-600" },
-          { label: "Fulfilled", value: requests.filter(r => r.status === "fulfilled").length, color: "text-green-600" },
-          { label: "Rejected", value: requests.filter(r => r.status === "rejected").length, color: "text-red-600" },
-        ].map(s => (
-          <Card key={s.label} className="border-0 shadow-sm rounded-xl">
-            <CardContent className="p-4">
-              <p className="text-xs font-medium text-gray-500 uppercase">{s.label}</p>
-              <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <Card className="shadow-sm border-0 rounded-xl">
-        <CardHeader className="py-4 border-b border-gray-100">
-          <CardTitle className="text-lg font-semibold text-gray-800">All Requests</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {requests.length === 0 ? (
-            <EmptyState message="No buyer requests submitted yet" />
-          ) : (
-            <Table>
-              <TableHeader className="bg-gray-50/50">
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Salesman</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Items</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {requests.map((req) => (
-                  <>
-                    <TableRow key={req.id} className="hover:bg-gray-50/50 cursor-pointer" onClick={() => setExpanded(expanded === req.id ? null : req.id)}>
-                      <TableCell className="text-gray-500 text-sm">
-                        {new Date(req.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                      </TableCell>
-                      <TableCell className="font-medium text-gray-900">{req.users?.full_name ?? "N/A"}</TableCell>
-                      <TableCell>{req.customers?.store_name ?? "N/A"}</TableCell>
-                      <TableCell>
-                        <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded text-xs font-bold">
-                          {req.buyer_request_items?.length || 0} items
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span className={`text-xs font-bold px-2.5 py-1 rounded-md uppercase ${statusStyles[req.status] || "bg-gray-100 text-gray-600"}`}>
-                          {req.status}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right space-x-2" onClick={(e) => e.stopPropagation()}>
-                        {req.status === "pending" && (
-                          <>
-                            <Button variant="ghost" size="sm" className="h-8 text-green-600 hover:bg-green-50 gap-1" disabled={actionLoading === req.id} onClick={() => handleStatusChange(req.id, "fulfilled")}>
-                              <CheckCircle className="w-3.5 h-3.5" /> Fulfill
-                            </Button>
-                            <Button variant="ghost" size="sm" className="h-8 text-red-600 hover:bg-red-50 gap-1" disabled={actionLoading === req.id} onClick={() => handleStatusChange(req.id, "rejected")}>
-                              <XCircle className="w-3.5 h-3.5" /> Reject
-                            </Button>
-                          </>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                    {expanded === req.id && req.buyer_request_items?.length > 0 && (
-                      <TableRow key={`${req.id}-expanded`} className="bg-gray-50/70">
-                        <TableCell colSpan={6} className="p-4">
-                          <div className="space-y-2">
-                            <p className="text-xs font-bold text-gray-500 uppercase">Requested Products</p>
-                            {req.buyer_request_items.map((item: any) => (
-                              <div key={item.id} className="flex items-center justify-between bg-white p-3 rounded-lg border border-gray-100">
-                                <div className="flex items-center gap-2">
-                                  <Package className="w-4 h-4 text-gray-400" />
-                                  <span className="font-medium text-sm">{item.products?.name || "Unknown Product"}</span>
-                                </div>
-                                <div className="flex items-center gap-4 text-sm">
-                                  <span className="font-bold">Qty: {item.quantity}</span>
-                                  {item.notes && <span className="text-gray-400 italic text-xs">"{item.notes}"</span>}
-                                </div>
-                              </div>
-                            ))}
-                            {req.notes && <p className="text-xs text-gray-500 italic mt-2">Note: "{req.notes}"</p>}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      {requests.length === 0 ? (
+        <div className="py-16 text-center text-gray-400">
+          <Inbox className="w-12 h-12 mx-auto mb-3" />
+          <p className="text-sm font-medium">No requests yet</p>
+          <Link href="/customers/buyer-requests/new" className="text-[#005914] text-sm font-bold mt-2 inline-block">Submit your first request →</Link>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {requests.map((r) => (
+            <Card key={r.id} className="shadow-sm border-0 rounded-xl hover:shadow-md transition-all">
+              <CardContent className="p-4 flex items-center gap-4">
+                <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+                  <FileText className="w-5 h-5 text-blue-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-bold text-gray-900">{r.buyer_request_items?.length || 0} items requested</h3>
+                  <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-400">
+                    <span>{new Date(r.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                    {r.users?.full_name && <><span>·</span><span>Salesman: {r.users.full_name}</span></>}
+                  </div>
+                  {r.notes && <p className="text-xs text-gray-500 mt-1 truncate italic">{r.notes}</p>}
+                </div>
+                <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase flex-shrink-0 ${statusColors[r.status] || "bg-gray-100 text-gray-700"}`}>{r.status}</span>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
