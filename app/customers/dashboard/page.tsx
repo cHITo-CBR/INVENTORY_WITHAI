@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Package, ShoppingBag, FileText, ChevronRight, Loader2, Inbox, Search, ShoppingCart } from "lucide-react";
+import { Package, ShoppingBag, FileText, ChevronRight, Loader2, Inbox, Search, ShoppingCart, Sparkles } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { getCurrentUser } from "@/app/actions/auth";
 import { getBuyerDashboard } from "@/app/actions/buyer-actions";
 
@@ -36,12 +37,39 @@ export default function BuyerDashboardPage() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Welcome */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#005914] via-[#007a1f] to-emerald-500 p-6 text-white shadow-lg">
-        <div>
-          <p className="text-green-100 text-sm font-medium">Welcome back,</p>
-          <h1 className="text-2xl font-bold mt-1">{userName || "Buyer"}</h1>
-          <p className="text-green-100/70 text-sm mt-2">Browse products, submit requests, and track your orders.</p>
+      {/* ═══ Premium Welcome ═══ */}
+      <div className="relative overflow-hidden rounded-3xl bg-[#005914] p-6 text-white shadow-xl shadow-green-900/10">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl opacity-50" />
+        <div className="relative z-10 flex items-center justify-between">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-white/10 border border-white/20">
+              <Sparkles className="w-3 h-3 text-green-300" />
+              <span className="text-[10px] font-black text-green-100 uppercase tracking-widest">Premium Partner Access</span>
+            </div>
+            <h1 className="text-3xl font-black tracking-tighter text-white leading-none">
+              Welcome, {userName.split(' ')[0] || "Partner"}
+            </h1>
+            <p className="text-green-100/70 text-sm font-medium">Explore the new Season Catalog and manage your inventory requests.</p>
+          </div>
+          <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 overflow-hidden ring-4 ring-white/10">
+            <Image src="/buyer-hero.png" alt="Buyer" width={64} height={64} className="w-full h-full object-cover" />
+          </div>
+        </div>
+        
+        {/* Marketplace Pulse */}
+        <div className="relative z-10 mt-6 grid grid-cols-3 gap-3">
+          <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
+            <p className="text-[10px] font-bold text-green-100/70 uppercase tracking-widest mb-1 leading-tighter">Purchase Volume</p>
+            <p className="text-lg font-black text-white">₱{(data?.totalPurchaseValue || 0).toLocaleString("en-PH", { minimumFractionDigits: 0 })}</p>
+          </div>
+          <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
+            <p className="text-[10px] font-bold text-green-100/70 uppercase tracking-widest mb-1 leading-tighter">Active Orders</p>
+            <p className="text-lg font-black text-white">{data?.recentOrders?.length || 0}</p>
+          </div>
+          <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
+            <p className="text-[10px] font-bold text-green-100/70 uppercase tracking-widest mb-1 leading-tighter">Credit Score</p>
+            <p className="text-lg font-black text-green-300">Elite</p>
+          </div>
         </div>
       </div>
 

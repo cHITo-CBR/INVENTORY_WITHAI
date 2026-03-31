@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, MapPin, FileText, Clock, ShoppingBag, AlertTriangle, DollarSign, Loader2, Inbox, TrendingUp, ChevronRight } from "lucide-react";
+import { Users, MapPin, FileText, Clock, ShoppingBag, AlertTriangle, DollarSign, Loader2, Inbox, TrendingUp, ChevronRight, Sparkles, Calendar, Zap } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import Image from "next/image";
 import { getSupervisorKPIs, getTeamSalesmen, getRecentTeamActivity, type SupervisorKPIs, type TeamSalesman } from "@/app/actions/supervisor-actions";
+import { getCurrentUser } from "@/app/actions/auth";
 
 function EmptyState({ message }: { message: string }) {
   return (
@@ -21,19 +23,22 @@ export default function SupervisorDashboardPage() {
   const [kpis, setKpis] = useState<SupervisorKPIs | null>(null);
   const [salesmen, setSalesmen] = useState<TeamSalesman[]>([]);
   const [activity, setActivity] = useState<any>(null);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       try {
-        const [kpiData, teamData, activityData] = await Promise.all([
+        const [kpiData, teamData, activityData, session] = await Promise.all([
           getSupervisorKPIs(),
           getTeamSalesmen(),
           getRecentTeamActivity(),
+          getCurrentUser()
         ]);
         setKpis(kpiData);
         setSalesmen(teamData);
         setActivity(activityData);
+        setUser(session?.user);
       } catch (err) {
         console.error("Supervisor dashboard error:", err);
       } finally {
@@ -72,9 +77,53 @@ export default function SupervisorDashboardPage() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Supervisor Dashboard</h1>
-        <p className="text-gray-500 text-sm">Monitor your team's field operations and performance.</p>
+      {/* ═══ Management Header ═══ */}
+      <div className="relative overflow-hidden rounded-3xl bg-[#005914] p-6 text-white shadow-xl shadow-green-900/10">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
+        <div className="relative z-10 flex items-start justify-between">
+          <div>
+            <p className="text-green-100 text-xs font-bold uppercase tracking-[0.2em] mb-1">Operations Tower</p>
+            <h2 className="text-2xl font-black tracking-tight">{user?.full_name ?? "Operations Lead"}</h2>
+            <div className="flex items-center gap-4 mt-2">
+              <p className="text-green-100/70 text-xs flex items-center gap-1.5 font-medium">
+                <Calendar className="w-3.5 h-3.5" />
+                {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+              </p>
+              <div className="w-1 h-1 rounded-full bg-white/20" />
+              <p className="text-green-200 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                Real-time Operations
+              </p>
+            </div>
+          </div>
+          <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 overflow-hidden">
+            <Image src="/supervisor-hero.png" alt="Supervisor" width={56} height={56} className="w-full h-full object-cover" />
+          </div>
+        </div>
+
+        {/* Efficiency Pulse */}
+        <div className="relative z-10 mt-6 grid grid-cols-2 gap-4">
+          <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[11px] font-bold text-green-100/70 uppercase tracking-wider">Revenue Insight (MTD)</p>
+              <Zap className="w-3 h-3 text-green-400" />
+            </div>
+            <p className="text-xl font-black tracking-tight text-white">₱{(kpis?.monthlySalesTotal ?? 0).toLocaleString("en-PH", { minimumFractionDigits: 0 })}</p>
+            <div className="w-full h-1 bg-white/10 rounded-full mt-3 overflow-hidden">
+              <div className="h-full bg-green-400 rounded-full w-[75%] transition-all" />
+            </div>
+          </div>
+          <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[11px] font-bold text-green-100/70 uppercase tracking-wider">Team Efficiency</p>
+              <Sparkles className="w-3 h-3 text-green-400" />
+            </div>
+            <p className="text-xl font-black tracking-tight text-white">88.5%</p>
+            <div className="w-full h-1 bg-white/10 rounded-full mt-3 overflow-hidden">
+              <div className="h-full bg-green-400 rounded-full w-[88%] transition-all" />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -144,14 +193,13 @@ export default function SupervisorDashboardPage() {
               <div className="space-y-2">
                 {allActivity.map((item, i) => (
                   <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50/50 hover:bg-gray-50 transition-colors">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                      item.type === "visit" ? "bg-teal-50 text-teal-600" :
-                      item.type === "callsheet" ? "bg-amber-50 text-amber-600" :
-                      "bg-purple-50 text-purple-600"
-                    }`}>
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${item.type === "visit" ? "bg-teal-50 text-teal-600" :
+                        item.type === "callsheet" ? "bg-amber-50 text-amber-600" :
+                          "bg-purple-50 text-purple-600"
+                      }`}>
                       {item.type === "visit" ? <MapPin className="w-4 h-4" /> :
-                       item.type === "callsheet" ? <FileText className="w-4 h-4" /> :
-                       <ShoppingBag className="w-4 h-4" />}
+                        item.type === "callsheet" ? <FileText className="w-4 h-4" /> :
+                          <ShoppingBag className="w-4 h-4" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">{item.label}</p>

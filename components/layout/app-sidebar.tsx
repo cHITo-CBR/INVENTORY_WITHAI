@@ -3,24 +3,24 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { 
-  BarChart3, 
-  Box, 
-  CheckSquare, 
-  ClipboardList, 
-  FileText, 
-  Home, 
-  LayoutDashboard, 
-  MapPin, 
-  Package, 
-  Package2, 
-  Settings, 
-  ShieldAlert, 
-  ShoppingCart, 
+import {
+  BarChart3,
+  Box,
+  CheckSquare,
+  ClipboardList,
+  FileText,
+  Home,
+  LayoutDashboard,
+  MapPin,
+  Package,
+  Package2,
+  Settings,
+  ShieldAlert,
+  ShoppingCart,
   ShoppingBag,
-  Sparkles, 
-  Tags, 
-  Users, 
+  Sparkles,
+  Tags,
+  Users,
   Bell,
   Archive
 } from "lucide-react";
@@ -110,8 +110,8 @@ export function AppSidebar({ basePath = "/admin" }: AppSidebarProps) {
       const isActive = pathname === url || pathname.startsWith(url + "/");
       return (
         <SidebarMenuItem key={item.title}>
-          <SidebarMenuButton 
-            asChild 
+          <SidebarMenuButton
+            asChild
             isActive={isActive}
             className="font-medium text-gray-700 data-[active=true]:bg-[#E2EBE5] data-[active=true]:text-[#005914] data-[active=true]:font-bold hover:bg-gray-50"
           >
@@ -150,8 +150,8 @@ export function AppSidebar({ basePath = "/admin" }: AppSidebarProps) {
                 const isActive = pathname === url || pathname.startsWith(url + "/");
                 return (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton 
-                      asChild 
+                    <SidebarMenuButton
+                      asChild
                       isActive={isActive}
                       className="font-medium text-gray-700 data-[active=true]:bg-[#E2EBE5] data-[active=true]:text-[#005914] data-[active=true]:font-bold hover:bg-gray-50"
                     >
