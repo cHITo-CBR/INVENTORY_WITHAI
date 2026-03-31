@@ -1,6 +1,6 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
+import { query } from "@/lib/mysql";
 
 export interface AIInsightRow {
   id: string;
@@ -14,14 +14,13 @@ export interface AIInsightRow {
 
 export async function getAIInsights(): Promise<AIInsightRow[]> {
   try {
-    const { data, error } = await supabase
-      .from("ai_insights")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const rows = await query<AIInsightRow[]>(
+      "SELECT * FROM ai_insights ORDER BY created_at DESC"
+    );
 
-    if (error || !data) return [];
-    return data;
-  } catch {
+    return rows || [];
+  } catch (error) {
+    console.error("getAIInsights error:", error);
     return [];
   }
 }

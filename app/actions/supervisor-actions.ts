@@ -1,6 +1,6 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
+import { query } from "@/lib/mysql";
 
 // ══════════════════════════════════════════════════════════════
 // TYPES
@@ -35,40 +35,50 @@ export interface TeamSalesman {
 
 export async function getSupervisorKPIs(): Promise<SupervisorKPIs> {
   const today = new Date().toISOString().split("T")[0];
-  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0];
 
-  const [
-    { count: activeSalesmen },
-    { count: visitsToday },
-    { count: submittedCallsheets },
-    { count: pendingCallsheetReviews },
-    { count: pendingRequests },
-    { count: pendingBookings },
-    salesData,
-    { count: lowStockItems },
-  ] = await Promise.all([
-    supabase.from("users").select("*", { count: "exact", head: true }).eq("role_id", 3).eq("is_active", true),
-    supabase.from("store_visits").select("*", { count: "exact", head: true }).gte("visit_date", today),
-    supabase.from("callsheets").select("*", { count: "exact", head: true }).eq("status", "submitted"),
-    supabase.from("callsheets").select("*", { count: "exact", head: true }).in("status", ["submitted"]),
-    supabase.from("buyer_requests").select("*", { count: "exact", head: true }).eq("status", "pending"),
-    supabase.from("sales_transactions").select("*", { count: "exact", head: true }).eq("status", "pending"),
-    supabase.from("sales_transactions").select("total_amount").gte("created_at", monthStart),
-    supabase.from("inventory_ledger").select("*", { count: "exact", head: true }).lt("balance", 10),
-  ]);
+  try {
+    const [
+      activeSalesmen,
+      visitsToday,
+      submittedCallsheets,
+      pendingRequests,
+      pendingBookings,
+      salesData,
+      lowStockItems,
+    ] = await Promise.all([
+      query<any[]>("SELECT COUNT(*) as count FROM users WHERE role_id = 3 AND is_active = TRUE"),
+      query<any[]>("SELECT COUNT(*) as count FROM store_visits WHERE visit_date >= ?", [today]),
+      query<any[]>("SELECT COUNT(*) as count FROM callsheets WHERE status = 'submitted'"),
+      query<any[]>("SELECT COUNT(*) as count FROM buyer_requests WHERE status = 'pending'"),
+      query<any[]>("SELECT COUNT(*) as count FROM sales_transactions WHERE status = 'pending'"),
+      query<any[]>("SELECT SUM(total_amount) as total FROM sales_transactions WHERE created_at >= ?", [monthStart]),
+      query<any[]>("SELECT COUNT(*) as count FROM inventory_ledger WHERE balance < 10"),
+    ]);
 
-  const monthlySalesTotal = (salesData.data || []).reduce((sum: number, t: any) => sum + (parseFloat(t.total_amount) || 0), 0);
-
-  return {
-    activeSalesmen: activeSalesmen ?? 0,
-    visitsToday: visitsToday ?? 0,
-    submittedCallsheets: submittedCallsheets ?? 0,
-    pendingCallsheetReviews: pendingCallsheetReviews ?? 0,
-    pendingRequests: pendingRequests ?? 0,
-    pendingBookings: pendingBookings ?? 0,
-    monthlySalesTotal,
-    lowStockItems: lowStockItems ?? 0,
-  };
+    return {
+      activeSalesmen: activeSalesmen[0]?.count ?? 0,
+      visitsToday: visitsToday[0]?.count ?? 0,
+      submittedCallsheets: submittedCallsheets[0]?.count ?? 0,
+      pendingCallsheetReviews: submittedCallsheets[0]?.count ?? 0,
+      pendingRequests: pendingRequests[0]?.count ?? 0,
+      pendingBookings: pendingBookings[0]?.count ?? 0,
+      monthlySalesTotal: parseFloat(salesData[0]?.total) || 0,
+      lowStockItems: lowStockItems[0]?.count ?? 0,
+    };
+  } catch (error) {
+    console.error("getSupervisorKPIs error:", error);
+    return {
+      activeSalesmen: 0,
+      visitsToday: 0,
+      submittedCallsheets: 0,
+      pendingCallsheetReviews: 0,
+      pendingRequests: 0,
+      pendingBookings: 0,
+      monthlySalesTotal: 0,
+      lowStockItems: 0,
+    };
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -77,65 +87,94 @@ export async function getSupervisorKPIs(): Promise<SupervisorKPIs> {
 
 export async function getTeamSalesmen(): Promise<TeamSalesman[]> {
   const today = new Date().toISOString().split("T")[0];
-  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0];
 
-  const { data: salesmen, error } = await supabase
-    .from("users")
-    .select("id, full_name, email, status, is_active")
-    .eq("role_id", 3)
-    .order("full_name");
+  try {
+    const salesmen = await query<any[]>(
+      "SELECT id, full_name, email, status, is_active FROM users WHERE role_id = 3 ORDER BY full_name"
+    );
 
-  if (error || !salesmen) return [];
+    const results = await Promise.all(
+      salesmen.map(async (s) => {
+        const [stats] = await query<any[]>(
+          `SELECT 
+            (SELECT COUNT(*) FROM store_visits WHERE salesman_id = ? AND visit_date >= ?) as visitsToday,
+            (SELECT COUNT(*) FROM callsheets WHERE salesman_id = ?) as totalCallsheets,
+            (SELECT COUNT(*) FROM buyer_requests WHERE salesman_id = ? AND status = 'pending') as pendingRequests,
+            (SELECT COUNT(*) FROM sales_transactions WHERE salesman_id = ? AND status != 'cancelled') as confirmedBookings,
+            (SELECT SUM(total_amount) FROM sales_transactions WHERE salesman_id = ? AND created_at >= ?) as monthlySales`,
+          [s.id, today, s.id, s.id, s.id, s.id, monthStart]
+        );
 
-  const results: TeamSalesman[] = await Promise.all(
-    salesmen.map(async (s) => {
-      const [
-        { count: visitsToday },
-        { count: totalCallsheets },
-        { count: pendingRequests },
-        { count: confirmedBookings },
-        salesData,
-      ] = await Promise.all([
-        supabase.from("store_visits").select("*", { count: "exact", head: true }).eq("salesman_id", s.id).gte("visit_date", today),
-        supabase.from("callsheets").select("*", { count: "exact", head: true }).eq("salesman_id", s.id),
-        supabase.from("buyer_requests").select("*", { count: "exact", head: true }).eq("salesman_id", s.id).eq("status", "pending"),
-        supabase.from("sales_transactions").select("*", { count: "exact", head: true }).eq("salesman_id", s.id).neq("status", "cancelled"),
-        supabase.from("sales_transactions").select("total_amount").eq("salesman_id", s.id).gte("created_at", monthStart),
-      ]);
+        return {
+          id: s.id,
+          full_name: s.full_name,
+          email: s.email,
+          status: s.is_active ? "active" : "inactive",
+          visitsToday: stats.visitsToday || 0,
+          totalCallsheets: stats.totalCallsheets || 0,
+          pendingRequests: stats.pendingRequests || 0,
+          confirmedBookings: stats.confirmedBookings || 0,
+          monthlySales: parseFloat(stats.monthlySales) || 0,
+        };
+      })
+    );
 
-      return {
-        id: s.id,
-        full_name: s.full_name,
-        email: s.email,
-        status: s.is_active ? "active" : "inactive",
-        visitsToday: visitsToday ?? 0,
-        totalCallsheets: totalCallsheets ?? 0,
-        pendingRequests: pendingRequests ?? 0,
-        confirmedBookings: confirmedBookings ?? 0,
-        monthlySales: (salesData.data || []).reduce((sum: number, t: any) => sum + (parseFloat(t.total_amount) || 0), 0),
-      };
-    })
-  );
-
-  return results;
+    return results;
+  } catch (error) {
+    console.error("getTeamSalesmen error:", error);
+    return [];
+  }
 }
 
 export async function getSalesmanDetail(salesmanId: string) {
-  const [
-    { data: profile },
-    { data: visits },
-    { data: callsheets },
-    { data: requests },
-    { data: bookings },
-  ] = await Promise.all([
-    supabase.from("users").select("id, full_name, email, phone_number, status, created_at").eq("id", salesmanId).single(),
-    supabase.from("store_visits").select("*, customers(store_name)").eq("salesman_id", salesmanId).order("visit_date", { ascending: false }).limit(20),
-    supabase.from("callsheets").select("*, customers(store_name)").eq("salesman_id", salesmanId).order("created_at", { ascending: false }).limit(20),
-    supabase.from("buyer_requests").select("*, customers(store_name), buyer_request_items(*, products(name))").eq("salesman_id", salesmanId).order("created_at", { ascending: false }).limit(20),
-    supabase.from("sales_transactions").select("*, customers(store_name)").eq("salesman_id", salesmanId).order("created_at", { ascending: false }).limit(20),
-  ]);
+  try {
+    const [profile] = await query<any[]>(
+      "SELECT id, full_name, email, phone_number, status, created_at FROM users WHERE id = ?",
+      [salesmanId]
+    );
 
-  return { profile, visits: visits || [], callsheets: callsheets || [], requests: requests || [], bookings: bookings || [] };
+    const [visits, callsheets, requests, bookings] = await Promise.all([
+      query<any[]>(
+        `SELECT sv.*, c.store_name FROM store_visits sv 
+         LEFT JOIN customers c ON sv.customer_id = c.id 
+         WHERE sv.salesman_id = ? ORDER BY sv.visit_date DESC LIMIT 20`,
+        [salesmanId]
+      ),
+      query<any[]>(
+        `SELECT cs.*, c.store_name FROM callsheets cs 
+         LEFT JOIN customers c ON cs.customer_id = c.id 
+         WHERE cs.salesman_id = ? ORDER BY cs.created_at DESC LIMIT 20`,
+        [salesmanId]
+      ),
+      query<any[]>(
+        `SELECT br.*, c.store_name FROM buyer_requests br 
+         LEFT JOIN customers c ON br.customer_id = c.id 
+         WHERE br.salesman_id = ? ORDER BY br.created_at DESC LIMIT 20`,
+        [salesmanId]
+      ),
+      query<any[]>(
+        `SELECT st.*, c.store_name FROM sales_transactions st 
+         LEFT JOIN customers c ON st.customer_id = c.id 
+         WHERE st.salesman_id = ? ORDER BY st.created_at DESC LIMIT 20`,
+        [salesmanId]
+      ),
+    ]);
+
+    // Fetch items for requests
+    const requestsWithItems = await Promise.all((requests || []).map(async (r) => {
+      const items = await query<any[]>(
+        "SELECT bri.*, p.name as product_name FROM buyer_request_items bri LEFT JOIN products p ON bri.product_id = p.id WHERE bri.request_id = ?",
+        [r.id]
+      );
+      return { ...r, buyer_request_items: items };
+    }));
+
+    return { profile, visits: visits || [], callsheets: callsheets || [], requests: requestsWithItems, bookings: bookings || [] };
+  } catch (error) {
+    console.error("getSalesmanDetail error:", error);
+    return { profile: null, visits: [], callsheets: [], requests: [], bookings: [] };
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -143,14 +182,18 @@ export async function getSalesmanDetail(salesmanId: string) {
 // ══════════════════════════════════════════════════════════════
 
 export async function getTeamCustomers() {
-  const { data, error } = await supabase
-    .from("customers")
-    .select("*, users:assigned_salesman_id(full_name)")
-    .eq("is_active", true)
-    .order("store_name");
-
-  if (error || !data) return [];
-  return data;
+  try {
+    const data = await query<any[]>(
+      `SELECT c.*, u.full_name as salesman_name 
+       FROM customers c 
+       LEFT JOIN users u ON c.assigned_salesman_id = u.id 
+       WHERE c.is_active = TRUE ORDER BY c.store_name`
+    );
+    return data || [];
+  } catch (error) {
+    console.error("getTeamCustomers error:", error);
+    return [];
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -158,43 +201,63 @@ export async function getTeamCustomers() {
 // ══════════════════════════════════════════════════════════════
 
 export async function getTeamVisits() {
-  const { data, error } = await supabase
-    .from("store_visits")
-    .select("*, customers(store_name), users:salesman_id(full_name)")
-    .order("visit_date", { ascending: false })
-    .limit(100);
-
-  if (error || !data) return [];
-  return data;
+  try {
+    const data = await query<any[]>(
+      `SELECT sv.*, c.store_name, u.full_name as salesman_name 
+       FROM store_visits sv 
+       LEFT JOIN customers c ON sv.customer_id = c.id 
+       LEFT JOIN users u ON sv.salesman_id = u.id 
+       ORDER BY sv.visit_date DESC LIMIT 100`
+    );
+    return data || [];
+  } catch (error) {
+    console.error("getTeamVisits error:", error);
+    return [];
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
-// CALLSHEETS (reuses getAllCallsheets but adds detail fetch)
+// CALLSHEETS
 // ══════════════════════════════════════════════════════════════
 
 export async function getCallsheetDetail(callsheetId: string) {
-  const { data, error } = await supabase
-    .from("callsheets")
-    .select(`
-      *,
-      customers(store_name, address),
-      users:salesman_id(full_name, email),
-      callsheet_items(*, products(name, total_packaging, net_weight))
-    `)
-    .eq("id", callsheetId)
-    .single();
+  try {
+    const [callsheet] = await query<any[]>(
+      `SELECT cs.*, c.store_name, c.address, u.full_name as salesman_name, u.email as salesman_email 
+       FROM callsheets cs 
+       LEFT JOIN customers c ON cs.customer_id = c.id 
+       LEFT JOIN users u ON cs.salesman_id = u.id 
+       WHERE cs.id = ?`,
+      [callsheetId]
+    );
 
-  if (error) return null;
-  return data;
+    if (!callsheet) return null;
+
+    const items = await query<any[]>(
+      `SELECT ci.*, p.name as product_name, p.total_packaging, p.net_weight 
+       FROM callsheet_items ci 
+       LEFT JOIN products p ON ci.product_id = p.id 
+       WHERE ci.callsheet_id = ?`,
+      [callsheetId]
+    );
+
+    return { ...callsheet, callsheet_items: items };
+  } catch (error) {
+    console.error("getCallsheetDetail error:", error);
+    return null;
+  }
 }
 
 export async function reviewCallsheet(callsheetId: string, status: "approved" | "rejected", supervisorNote?: string) {
-  const updateData: any = { status, updated_at: new Date().toISOString() };
-  if (supervisorNote) updateData.remarks = supervisorNote;
-
-  const { error } = await supabase.from("callsheets").update(updateData).eq("id", callsheetId);
-  if (error) return { error: error.message };
-  return { success: true };
+  try {
+    await query(
+      "UPDATE callsheets SET status = ?, remarks = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      [status, supervisorNote || null, callsheetId]
+    );
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -202,14 +265,28 @@ export async function reviewCallsheet(callsheetId: string, status: "approved" | 
 // ══════════════════════════════════════════════════════════════
 
 export async function getTeamBuyerRequests() {
-  const { data, error } = await supabase
-    .from("buyer_requests")
-    .select("*, customers(store_name), users:salesman_id(full_name), buyer_request_items(*, products(name))")
-    .order("created_at", { ascending: false })
-    .limit(100);
+  try {
+    const requests = await query<any[]>(
+      `SELECT br.*, c.store_name, u.full_name as salesman_name 
+       FROM buyer_requests br 
+       LEFT JOIN customers c ON br.customer_id = c.id 
+       LEFT JOIN users u ON br.salesman_id = u.id 
+       ORDER BY br.created_at DESC LIMIT 100`
+    );
 
-  if (error || !data) return [];
-  return data;
+    const results = await Promise.all((requests || []).map(async (r) => {
+      const items = await query<any[]>(
+        "SELECT bri.*, p.name as product_name FROM buyer_request_items bri LEFT JOIN products p ON bri.product_id = p.id WHERE bri.request_id = ?",
+        [r.id]
+      );
+      return { ...r, buyer_request_items: items };
+    }));
+
+    return results;
+  } catch (error) {
+    console.error("getTeamBuyerRequests error:", error);
+    return [];
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -217,14 +294,19 @@ export async function getTeamBuyerRequests() {
 // ══════════════════════════════════════════════════════════════
 
 export async function getTeamBookings() {
-  const { data, error } = await supabase
-    .from("sales_transactions")
-    .select("*, customers(store_name), users:salesman_id(full_name)")
-    .order("created_at", { ascending: false })
-    .limit(100);
-
-  if (error || !data) return [];
-  return data;
+  try {
+    const data = await query<any[]>(
+      `SELECT st.*, c.store_name, u.full_name as salesman_name 
+       FROM sales_transactions st 
+       LEFT JOIN customers c ON st.customer_id = c.id 
+       LEFT JOIN users u ON st.salesman_id = u.id 
+       ORDER BY st.created_at DESC LIMIT 100`
+    );
+    return data || [];
+  } catch (error) {
+    console.error("getTeamBookings error:", error);
+    return [];
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -232,32 +314,46 @@ export async function getTeamBookings() {
 // ══════════════════════════════════════════════════════════════
 
 export async function getInventoryImpact() {
-  const { data: lowStock } = await supabase
-    .from("inventory_ledger")
-    .select("*, product_variants(name, sku, products:product_id(name))")
-    .lt("balance", 10)
-    .order("balance", { ascending: true })
-    .limit(20);
+  try {
+    const lowStock = await query<any[]>(
+      `SELECT il.*, pv.name as variant_name, pv.sku, p.name as product_name 
+       FROM inventory_ledger il 
+       LEFT JOIN product_variants pv ON il.variant_id = pv.id 
+       LEFT JOIN products p ON pv.product_id = p.id 
+       WHERE il.balance < 10 ORDER BY il.balance ASC LIMIT 20`
+    );
 
-  const { data: recentMovements } = await supabase
-    .from("inventory_ledger")
-    .select("*, product_variants(name, sku, products:product_id(name)), inventory_movement_types(name, direction)")
-    .order("created_at", { ascending: false })
-    .limit(20);
+    const recentMovements = await query<any[]>(
+      `SELECT il.*, pv.name as variant_name, pv.sku, p.name as product_name, imt.name as movement_name, imt.direction 
+       FROM inventory_ledger il 
+       LEFT JOIN product_variants pv ON il.variant_id = pv.id 
+       LEFT JOIN products p ON pv.product_id = p.id 
+       LEFT JOIN inventory_movement_types imt ON il.movement_type_id = imt.id 
+       ORDER BY il.created_at DESC LIMIT 20`
+    );
 
-  return { lowStock: lowStock || [], recentMovements: recentMovements || [] };
+    return { lowStock: lowStock || [], recentMovements: recentMovements || [] };
+  } catch (error) {
+    console.error("getInventoryImpact error:", error);
+    return { lowStock: [], recentMovements: [] };
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
-// RECENT ACTIVITY (for dashboard feed)
+// RECENT ACTIVITY
 // ══════════════════════════════════════════════════════════════
 
 export async function getRecentTeamActivity() {
-  const [{ data: visits }, { data: callsheets }, { data: requests }] = await Promise.all([
-    supabase.from("store_visits").select("id, visit_date, created_at, customers(store_name), users:salesman_id(full_name)").order("created_at", { ascending: false }).limit(5),
-    supabase.from("callsheets").select("id, status, created_at, customers(store_name), users:salesman_id(full_name)").order("created_at", { ascending: false }).limit(5),
-    supabase.from("buyer_requests").select("id, status, created_at, customers(store_name), users:salesman_id(full_name)").order("created_at", { ascending: false }).limit(5),
-  ]);
+  try {
+    const [visits, callsheets, requests] = await Promise.all([
+      query<any[]>(`SELECT sv.id, sv.visit_date, sv.created_at, c.store_name, u.full_name as salesman_name FROM store_visits sv LEFT JOIN customers c ON sv.customer_id = c.id LEFT JOIN users u ON sv.salesman_id = u.id ORDER BY sv.created_at DESC LIMIT 5`),
+      query<any[]>(`SELECT cs.id, cs.status, cs.created_at, c.store_name, u.full_name as salesman_name FROM callsheets cs LEFT JOIN customers c ON cs.customer_id = c.id LEFT JOIN users u ON cs.salesman_id = u.id ORDER BY cs.created_at DESC LIMIT 5`),
+      query<any[]>(`SELECT br.id, br.status, br.created_at, c.store_name, u.full_name as salesman_name FROM buyer_requests br LEFT JOIN customers c ON br.customer_id = c.id LEFT JOIN users u ON br.salesman_id = u.id ORDER BY br.created_at DESC LIMIT 5`),
+    ]);
 
-  return { visits: visits || [], callsheets: callsheets || [], requests: requests || [] };
+    return { visits: visits || [], callsheets: callsheets || [], requests: requests || [] };
+  } catch (error) {
+    console.error("getRecentTeamActivity error:", error);
+    return { visits: [], callsheets: [], requests: [] };
+  }
 }

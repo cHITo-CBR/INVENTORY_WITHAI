@@ -1,6 +1,6 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
+import { query } from "@/lib/mysql";
 
 export interface SalesmanKPIs {
   todayVisits: number;
@@ -17,48 +17,30 @@ export async function getSalesmanKPIs(userId: string): Promise<SalesmanKPIs> {
   try {
     const today = new Date().toISOString().split('T')[0];
 
-    // Parallel counts
-    const [visits, pendingCS, submittedCS, buyerReqs, bookings] = await Promise.all([
-      // Today's visits
-      supabase.from("store_visits")
-        .select("*", { count: "exact", head: true })
-        .eq("salesman_id", userId)
-        .gte("visit_date", `${today}T00:00:00Z`),
-
-      // Pending (Draft) Callsheets
-      supabase.from("callsheets")
-        .select("*", { count: "exact", head: true })
-        .eq("salesman_id", userId)
-        .eq("status", "draft"),
-
-      // Submitted Callsheets
-      supabase.from("callsheets")
-        .select("*", { count: "exact", head: true })
-        .eq("salesman_id", userId)
-        .eq("status", "submitted"),
-
-      // Pending Buyer Requests
-      supabase.from("buyer_requests")
-        .select("*", { count: "exact", head: true })
-        .eq("salesman_id", userId)
-        .eq("status", "pending"),
-
-      // Confirmed Bookings (Sales Transactions)
-      supabase.from("sales_transactions")
-        .select("*", { count: "exact", head: true })
-        .eq("salesman_id", userId)
-        .eq("status", "completed")
+    // Running scalar counts in parallel
+    const [
+      visitsResult,
+      pendingCSResult,
+      submittedCSResult,
+      buyerReqsResult,
+      bookingsResult
+    ] = await Promise.all([
+      query<any[]>("SELECT COUNT(*) as count FROM store_visits WHERE salesman_id = ? AND visit_date >= ?", [userId, today]),
+      query<any[]>("SELECT COUNT(*) as count FROM callsheets WHERE salesman_id = ? AND status = 'draft'", [userId]),
+      query<any[]>("SELECT COUNT(*) as count FROM callsheets WHERE salesman_id = ? AND status = 'submitted'", [userId]),
+      query<any[]>("SELECT COUNT(*) as count FROM buyer_requests WHERE salesman_id = ? AND status = 'pending'", [userId]),
+      query<any[]>("SELECT COUNT(*) as count FROM sales_transactions WHERE salesman_id = ? AND status = 'completed'", [userId]),
     ]);
 
     return {
-      todayVisits: visits.count ?? 0,
-      pendingCallsheets: pendingCS.count ?? 0,
-      submittedCallsheets: submittedCS.count ?? 0,
-      pendingBuyerRequests: buyerReqs.count ?? 0,
-      confirmedBookings: bookings.count ?? 0
+      todayVisits: visitsResult[0]?.count ?? 0,
+      pendingCallsheets: pendingCSResult[0]?.count ?? 0,
+      submittedCallsheets: submittedCSResult[0]?.count ?? 0,
+      pendingBuyerRequests: buyerReqsResult[0]?.count ?? 0,
+      confirmedBookings: bookingsResult[0]?.count ?? 0
     };
-  } catch (err) {
-    console.error("Salesman KPI error:", err);
+  } catch (error) {
+    console.error("Salesman KPI error:", error);
     return {
       todayVisits: 0,
       pendingCallsheets: 0,
@@ -74,25 +56,56 @@ export async function getSalesmanKPIs(userId: string): Promise<SalesmanKPIs> {
  */
 export async function getSalesmanRecentActivity(userId: string) {
   try {
-    const { data: visits } = await supabase
-      .from("store_visits")
-      .select("*, customers(store_name)")
-      .eq("salesman_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(3);
-
-    const { data: callsheets } = await supabase
-      .from("callsheets")
-      .select("*, customers(store_name)")
-      .eq("salesman_id", userId)
-      .order("updated_at", { ascending: false })
-      .limit(3);
+    const [visits, callsheets] = await Promise.all([
+      query<any[]>(
+        `SELECT sv.*, c.store_name 
+         FROM store_visits sv 
+         LEFT JOIN customers c ON sv.customer_id = c.id 
+         WHERE sv.salesman_id = ? 
+         ORDER BY sv.created_at DESC LIMIT 3`,
+        [userId]
+      ),
+      query<any[]>(
+        `SELECT cs.*, c.store_name 
+         FROM callsheets cs 
+         LEFT JOIN customers c ON cs.customer_id = c.id 
+         WHERE cs.salesman_id = ? 
+         ORDER BY cs.updated_at DESC LIMIT 3`,
+        [userId]
+      ),
+    ]);
 
     return {
-      visits: visits ?? [],
-      callsheets: callsheets ?? []
+      visits: visits || [],
+      callsheets: callsheets || []
     };
-  } catch {
+  } catch (error) {
+    console.error("getSalesmanRecentActivity error:", error);
     return { visits: [], callsheets: [] };
+  }
+}
+
+/**
+ * Gets all bookings (sales transactions) for a salesman.
+ */
+export async function getSalesmanBookings(userId: string) {
+  try {
+    const bookings = await query<any[]>(
+      `SELECT st.*, c.store_name 
+       FROM sales_transactions st
+       LEFT JOIN customers c ON st.customer_id = c.id
+       WHERE st.salesman_id = ?
+       ORDER BY st.created_at DESC`,
+      [userId]
+    );
+
+    // Map to expected format (customers: { store_name })
+    return bookings.map(b => ({
+      ...b,
+      customers: { store_name: b.store_name }
+    }));
+  } catch (error) {
+    console.error("getSalesmanBookings error:", error);
+    return [];
   }
 }

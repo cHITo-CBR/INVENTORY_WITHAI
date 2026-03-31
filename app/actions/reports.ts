@@ -1,6 +1,6 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
+import pool from "@/lib/mysql";
 
 export interface SalesTrendPoint {
   date: string;
@@ -17,46 +17,48 @@ export async function getSalesTrends(): Promise<SalesTrendPoint[]> {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const { data, error } = await supabase
-      .from("sales_transactions")
-      .select("total_amount, created_at")
-      .gte("created_at", thirtyDaysAgo.toISOString())
-      .order("created_at", { ascending: true });
+    const [rows] = await pool.execute(`
+      SELECT total_amount, created_at 
+      FROM sales_transactions 
+      WHERE created_at >= ? 
+      ORDER BY created_at ASC
+    `, [thirtyDaysAgo]) as any;
 
-    if (error || !data || data.length === 0) return [];
+    if (!rows || rows.length === 0) return [];
 
     // Group by date
     const grouped: Record<string, number> = {};
-    data.forEach((t: any) => {
+    rows.forEach((t: any) => {
       const date = new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      grouped[date] = (grouped[date] || 0) + (t.total_amount ?? 0);
+      grouped[date] = (grouped[date] || 0) + Number(t.total_amount ?? 0);
     });
 
     return Object.entries(grouped).map(([date, total]) => ({ date, total }));
-  } catch {
+  } catch (err) {
+    console.error("getSalesTrends error:", err);
     return [];
   }
 }
 
 export async function getTopCategories(): Promise<CategorySalesPoint[]> {
   try {
-    const { data, error } = await supabase
-      .from("sales_transaction_items")
-      .select("subtotal, product_variants:variant_id(product_id, products:product_id(product_categories:category_id(name)))");
+    const [rows] = await pool.execute(`
+      SELECT pc.name as category, SUM(sti.subtotal) as total
+      FROM sales_transaction_items sti
+      JOIN product_variants pv ON sti.variant_id = pv.id
+      JOIN products p ON pv.product_id = p.id
+      JOIN product_categories pc ON p.category_id = pc.id
+      GROUP BY pc.name
+      ORDER BY total DESC
+      LIMIT 5
+    `) as any;
 
-    if (error || !data || data.length === 0) return [];
-
-    const grouped: Record<string, number> = {};
-    data.forEach((item: any) => {
-      const catName = item.product_variants?.products?.product_categories?.name ?? "Uncategorized";
-      grouped[catName] = (grouped[catName] || 0) + (item.subtotal ?? 0);
-    });
-
-    return Object.entries(grouped)
-      .map(([category, total]) => ({ category, total }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 5);
-  } catch {
+    return rows.map((r: any) => ({
+      category: r.category,
+      total: Number(r.total)
+    }));
+  } catch (err) {
+    console.error("getTopCategories error:", err);
     return [];
   }
 }

@@ -1,7 +1,8 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
+import pool from "@/lib/mysql";
 import { revalidatePath } from "next/cache";
+import { v4 as uuidv4 } from "uuid";
 
 export interface CustomerRow {
   id: string;
@@ -14,7 +15,7 @@ export interface CustomerRow {
   region: string | null;
   is_active: boolean;
   created_at: string;
-  users: { full_name: string } | null;
+  salesman_name: string | null;
 }
 
 export interface CustomerStats {
@@ -24,40 +25,36 @@ export interface CustomerStats {
 
 export async function getCustomers(): Promise<CustomerRow[]> {
   try {
-    const { data, error } = await supabase
-      .from("customers")
-      .select("id, store_name, contact_person, phone, email, address, city, region, is_active, created_at, users:assigned_salesman_id(full_name)")
-      .eq("is_active", true)
-      .order("created_at", { ascending: false });
-
-    if (error || !data) return [];
-    return data as any as CustomerRow[];
-  } catch {
+    const [rows] = await pool.execute(`
+      SELECT c.*, u.full_name as salesman_name
+      FROM customers c
+      LEFT JOIN users u ON c.assigned_salesman_id = u.id
+      WHERE c.is_active = true
+      ORDER BY c.created_at DESC
+    `) as any;
+    return rows;
+  } catch (err) {
+    console.error("getCustomers error:", err);
     return [];
   }
 }
 
 export async function getCustomerStats(): Promise<CustomerStats> {
   try {
-    const { count: totalActive } = await supabase
-      .from("customers")
-      .select("*", { count: "exact", head: true })
-      .eq("is_active", true);
-
+    const [totalActiveRows] = await pool.execute("SELECT COUNT(*) as count FROM customers WHERE is_active = true") as any;
+    
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
-    const { count: newThisMonth } = await supabase
-      .from("customers")
-      .select("*", { count: "exact", head: true })
-      .gte("created_at", startOfMonth.toISOString());
+    const [newThisMonthRows] = await pool.execute("SELECT COUNT(*) as count FROM customers WHERE created_at >= ?", [startOfMonth]) as any;
 
     return {
-      totalActive: totalActive ?? 0,
-      newThisMonth: newThisMonth ?? 0,
+      totalActive: totalActiveRows[0]?.count ?? 0,
+      newThisMonth: newThisMonthRows[0]?.count ?? 0,
     };
-  } catch {
+  } catch (err) {
+    console.error("getCustomerStats error:", err);
     return { totalActive: 0, newThisMonth: 0 };
   }
 }
@@ -74,51 +71,53 @@ export async function createCustomer(formData: FormData) {
 
   if (!storeName) return { error: "Store name is required." };
 
-  const { error } = await supabase.from("customers").insert([
-    {
-      store_name: storeName,
-      contact_person: contactPerson || null,
-      phone: phone || null,
-      email: email || null,
-      address: address || null,
-      city: city || null,
-      region: region || null,
-      assigned_salesman_id: assignedSalesmanId || null,
-    },
-  ]);
+  try {
+    await pool.execute(
+      "INSERT INTO customers (id, store_name, contact_person, phone, email, address, city, region, assigned_salesman_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [
+        uuidv4(),
+        storeName,
+        contactPerson || null,
+        phone || null,
+        email || null,
+        address || null,
+        city || null,
+        region || null,
+        assignedSalesmanId || null,
+      ]
+    );
 
-  if (error) return { error: error.message };
-
-  revalidatePath("/customers");
-  return { success: true };
+    revalidatePath("/customers");
+    return { success: true };
+  } catch (err: any) {
+    console.error("createCustomer error:", err);
+    return { error: err.message };
+  }
 }
 
 export async function getSalesmenForAssignment(): Promise<{ id: string; full_name: string }[]> {
   try {
-    const { data, error } = await supabase
-      .from("users")
-      .select("id, full_name")
-      .eq("is_active", true)
-      .order("full_name");
-    if (error || !data) return [];
-    return data;
-  } catch {
+    const [rows] = await pool.execute("SELECT id, full_name FROM users WHERE is_active = true ORDER BY full_name") as any;
+    return rows;
+  } catch (err) {
+    console.error("getSalesmenForAssignment error:", err);
     return [];
   }
 }
 
 export async function getSalesmanCustomers(salesmanId: string): Promise<CustomerRow[]> {
   try {
-    const { data, error } = await supabase
-      .from("customers")
-      .select("id, store_name, contact_person, phone, email, address, city, region, is_active, created_at, users:assigned_salesman_id(full_name)")
-      .eq("assigned_salesman_id", salesmanId)
-      .eq("is_active", true)
-      .order("store_name", { ascending: true });
-
-    if (error || !data) return [];
-    return data as any as CustomerRow[];
-  } catch {
+    const [rows] = await pool.execute(`
+      SELECT c.*, u.full_name as salesman_name
+      FROM customers c
+      LEFT JOIN users u ON c.assigned_salesman_id = u.id
+      WHERE c.assigned_salesman_id = ?
+      AND c.is_active = true
+      ORDER BY c.store_name ASC
+    `, [salesmanId]) as any;
+    return rows;
+  } catch (err) {
+    console.error("getSalesmanCustomers error:", err);
     return [];
   }
 }

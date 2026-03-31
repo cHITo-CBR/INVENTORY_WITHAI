@@ -1,32 +1,21 @@
-import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/app/actions/auth";
+import { getPendingUsers } from "@/app/actions/admin-actions";
 import { redirect } from "next/navigation";
 import AdminApprovalClient from "./AdminApprovalClient";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { LogOut } from "lucide-react";
+import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminApprovalsPage() {
-  const supabase = await createClient();
   const user = await getCurrentUser();
 
   if (!user || user.role !== "admin") {
     redirect("/login");
   }
 
-  // Fetch pending users
-  const { data: users, error } = await supabase
-    .from("users")
-    .select("id, full_name, email, phone_number, created_at, roles(name)")
-    .eq("status", "pending")
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    return <div className="p-8 text-red-500">Error loading users: {error.message}</div>;
-  }
+  // Fetch pending users via MySQL action
+  const users = await getPendingUsers();
 
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-6">

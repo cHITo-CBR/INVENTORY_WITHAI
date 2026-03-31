@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import pool from "@/lib/mysql";
 
 export type SearchResult = {
   id: string;
@@ -13,65 +13,71 @@ export type SearchResult = {
 export async function globalSearch(query: string): Promise<SearchResult[]> {
   if (!query || query.trim().length < 2) return [];
 
-  const supabase = await createClient();
   const searchTerm = `%${query.trim()}%`;
   const results: SearchResult[] = [];
 
-  // Search Products
-  const { data: products } = await supabase
-    .from("products")
-    .select("id, name, sku")
-    .ilike("name", searchTerm)
-    .limit(3);
+  try {
+    // Search Product Variants
+    const [products] = await pool.execute(`
+      SELECT id, name, sku 
+      FROM product_variants 
+      WHERE name LIKE ? OR sku LIKE ?
+      LIMIT 3
+    `, [searchTerm, searchTerm]) as any;
     
-  if (products) {
-    products.forEach((p) => {
-      results.push({
-        id: `prod_${p.id}`,
-        type: "product",
-        title: p.name,
-        subtitle: `SKU: ${p.sku || "N/A"}`,
-        url: `/catalog/products`,
+    if (products) {
+      products.forEach((p: any) => {
+        results.push({
+          id: `prod_${p.id}`,
+          type: "product",
+          title: p.name,
+          subtitle: `SKU: ${p.sku || "N/A"}`,
+          url: `/catalog/products`,
+        });
       });
-    });
-  }
+    }
 
-  // Search Customers
-  const { data: customers } = await supabase
-    .from("customers")
-    .select("id, store_name, contact_person")
-    .ilike("store_name", searchTerm)
-    .limit(3);
+    // Search Customers
+    const [customers] = await pool.execute(`
+      SELECT id, store_name, contact_person 
+      FROM customers 
+      WHERE store_name LIKE ? 
+      LIMIT 3
+    `, [searchTerm]) as any;
 
-  if (customers) {
-    customers.forEach((c) => {
-      results.push({
-        id: `cust_${c.id}`,
-        type: "customer",
-        title: c.store_name,
-        subtitle: `Contact: ${c.contact_person || "N/A"}`,
-        url: `/customers`,
+    if (customers) {
+      customers.forEach((c: any) => {
+        results.push({
+          id: `cust_${c.id}`,
+          type: "customer",
+          title: c.store_name,
+          subtitle: `Contact: ${c.contact_person || "N/A"}`,
+          url: `/customers`,
+        });
       });
-    });
-  }
+    }
 
-  // Search Users
-  const { data: users } = await supabase
-    .from("users")
-    .select("id, full_name, email")
-    .ilike("full_name", searchTerm)
-    .limit(3);
+    // Search Users
+    const [users] = await pool.execute(`
+      SELECT id, full_name, email 
+      FROM users 
+      WHERE full_name LIKE ? 
+      LIMIT 3
+    `, [searchTerm]) as any;
 
-  if (users) {
-    users.forEach((u) => {
-      results.push({
-        id: `user_${u.id}`,
-        type: "user",
-        title: u.full_name,
-        subtitle: u.email,
-        url: `/users`,
+    if (users) {
+      users.forEach((u: any) => {
+        results.push({
+          id: `user_${u.id}`,
+          type: "user",
+          title: u.full_name,
+          subtitle: u.email,
+          url: `/users`,
+        });
       });
-    });
+    }
+  } catch (err) {
+    console.error("globalSearch error:", err);
   }
 
   return results;

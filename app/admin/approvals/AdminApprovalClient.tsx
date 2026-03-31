@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { approveUser, rejectUser } from "@/app/actions/admin";
+import { approveUser, rejectUser } from "@/app/actions/admin-actions";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { TableRow, TableCell } from "@/components/ui/table";
 import { Check, X, Loader2 } from "lucide-react";
@@ -11,7 +10,6 @@ import { Check, X, Loader2 } from "lucide-react";
 export default function AdminApprovalClient({ user }: { user: any }) {
   const [loading, setLoading] = useState(false);
   const [rejectMode, setRejectMode] = useState(false);
-  const [reason, setReason] = useState("");
 
   const handleApprove = async () => {
     setLoading(true);
@@ -20,9 +18,8 @@ export default function AdminApprovalClient({ user }: { user: any }) {
   };
 
   const handleReject = async () => {
-    if (!reason) return alert("Please provide a reason.");
     setLoading(true);
-    await rejectUser(user.id, reason);
+    await rejectUser(user.id);
     setLoading(false);
     setRejectMode(false);
   };
@@ -47,20 +44,14 @@ export default function AdminApprovalClient({ user }: { user: any }) {
       <TableCell className="text-right">
         {rejectMode ? (
           <div className="flex items-center justify-end space-x-2">
-            <Input 
-              type="text" 
-              placeholder="Reason..." 
-              value={reason} 
-              onChange={(e) => setReason(e.target.value)}
-              className="h-8 w-40 text-xs"
-            />
+            <span className="text-xs text-muted-foreground">Confirm rejection?</span>
             <Button 
               size="sm" 
               variant="destructive"
               onClick={handleReject}
               disabled={loading}
             >
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm"}
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Yes, Reject"}
             </Button>
             <Button 
               size="sm" 

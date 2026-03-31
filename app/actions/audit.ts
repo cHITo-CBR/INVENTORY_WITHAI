@@ -1,6 +1,6 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
+import pool from "@/lib/mysql";
 
 export interface AuditLogRow {
   id: string;
@@ -10,20 +10,21 @@ export interface AuditLogRow {
   ip_address: string | null;
   metadata: any;
   created_at: string;
-  users: { full_name: string } | null;
+  full_name: string | null;
 }
 
 export async function getAuditLogs(): Promise<AuditLogRow[]> {
   try {
-    const { data, error } = await supabase
-      .from("audit_logs")
-      .select("id, action, entity_type, entity_id, ip_address, metadata, created_at, users:user_id(full_name)")
-      .order("created_at", { ascending: false })
-      .limit(50);
-
-    if (error || !data) return [];
-    return data as any as AuditLogRow[];
-  } catch {
+    const [rows] = await pool.execute(`
+      SELECT al.*, u.full_name
+      FROM audit_logs al
+      LEFT JOIN users u ON al.user_id = u.id
+      ORDER BY al.created_at DESC
+      LIMIT 50
+    `) as any;
+    return rows;
+  } catch (err) {
+    console.error("getAuditLogs error:", err);
     return [];
   }
 }

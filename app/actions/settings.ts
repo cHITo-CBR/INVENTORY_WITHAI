@@ -1,6 +1,6 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
+import pool from "@/lib/mysql";
 import { revalidatePath } from "next/cache";
 
 export interface SettingRow {
@@ -12,38 +12,34 @@ export interface SettingRow {
 
 export async function getSettings(): Promise<SettingRow[]> {
   try {
-    const { data, error } = await supabase
-      .from("system_settings")
-      .select("*")
-      .order("key");
-
-    if (error || !data) return [];
-    return data;
-  } catch {
+    const [rows] = await pool.execute("SELECT * FROM system_settings ORDER BY `key`") as any;
+    return rows;
+  } catch (err) {
+    console.error("getSettings error:", err);
     return [];
   }
 }
 
 export async function updateSetting(key: string, value: string) {
-  const { data: existing } = await supabase
-    .from("system_settings")
-    .select("id")
-    .eq("key", key)
-    .single();
+  try {
+    const [rows] = await pool.execute("SELECT id FROM system_settings WHERE `key` = ?", [key]) as any;
 
-  if (existing) {
-    const { error } = await supabase
-      .from("system_settings")
-      .update({ value, updated_at: new Date().toISOString() })
-      .eq("key", key);
-    if (error) return { error: error.message };
-  } else {
-    const { error } = await supabase
-      .from("system_settings")
-      .insert([{ key, value }]);
-    if (error) return { error: error.message };
+    if (rows.length > 0) {
+      await pool.execute(
+        "UPDATE system_settings SET `value` = ? WHERE `key` = ?",
+        [value, key]
+      );
+    } else {
+      await pool.execute(
+        "INSERT INTO system_settings (`key`, `value`) VALUES (?, ?)",
+        [key, value]
+      );
+    }
+
+    revalidatePath("/settings");
+    return { success: true };
+  } catch (err: any) {
+    console.error("updateSetting error:", err);
+    return { error: err.message };
   }
-
-  revalidatePath("/settings");
-  return { success: true };
 }

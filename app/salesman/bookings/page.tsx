@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { ShoppingBag, Plus, ChevronRight, Clock, CheckCircle, XCircle, Truck } from "lucide-react";
+import { ShoppingBag, Plus, Clock, CheckCircle, XCircle, Truck } from "lucide-react";
 import Link from "next/link";
 import { getCurrentUser } from "@/app/actions/auth";
-import { supabase } from "@/lib/supabase";
+import { getSalesmanBookings } from "@/app/actions/salesman-dashboard";
 
 const statusConfig: Record<string, { icon: any; color: string; bg: string }> = {
   pending: { icon: Clock, color: "text-amber-600", bg: "bg-amber-50" },
@@ -20,14 +20,9 @@ export default function SalesmanBookingsPage() {
 
   useEffect(() => {
     async function load() {
-      const session = await getCurrentUser();
-      const userId = session?.user?.id;
-      if (userId) {
-        const { data } = await supabase
-          .from("sales_transactions")
-          .select("*, customers:customer_id (store_name)")
-          .eq("salesman_id", userId)
-          .order("created_at", { ascending: false });
+      const user = await getCurrentUser();
+      if (user?.id) {
+        const data = await getSalesmanBookings(user.id);
         setBookings(data || []);
       }
       setLoading(false);

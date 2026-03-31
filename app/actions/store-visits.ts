@@ -1,7 +1,8 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
+import { query } from "@/lib/mysql";
 import { revalidatePath } from "next/cache";
+import { randomUUID } from "crypto";
 
 export interface CreateStoreVisitInput {
   customer_id: string;
@@ -15,18 +16,19 @@ export interface CreateStoreVisitInput {
  * Records a new store visit.
  */
 export async function createStoreVisit(input: CreateStoreVisitInput) {
-  try {
-    const { data, error } = await supabase
-      .from("store_visits")
-      .insert(input)
-      .select()
-      .single();
+  const visitId = randomUUID();
+  const today = new Date().toISOString().split('T')[0];
 
-    if (error) throw error;
+  try {
+    await query(
+      `INSERT INTO store_visits (id, customer_id, salesman_id, visit_date, notes, latitude, longitude) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [visitId, input.customer_id, input.salesman_id, today, input.notes, input.latitude, input.longitude]
+    );
 
     revalidatePath("/salesman/dashboard");
     revalidatePath("/salesman/visits");
-    return { success: true, data };
+    return { success: true, data: { id: visitId } };
   } catch (error: any) {
     console.error("createStoreVisit error:", error);
     return { success: false, error: error.message };
@@ -38,16 +40,15 @@ export async function createStoreVisit(input: CreateStoreVisitInput) {
  */
 export async function getSalesmanVisits(salesmanId: string) {
   try {
-    const { data, error } = await supabase
-      .from("store_visits")
-      .select(`
-        *,
-        customers (store_name, address)
-      `)
-      .eq("salesman_id", salesmanId)
-      .order("visit_date", { ascending: false });
+    const data = await query<any[]>(
+      `SELECT sv.*, c.store_name, c.address 
+       FROM store_visits sv
+       LEFT JOIN customers c ON sv.customer_id = c.id
+       WHERE sv.salesman_id = ? 
+       ORDER BY sv.visit_date DESC`,
+      [salesmanId]
+    );
 
-    if (error) throw error;
     return { success: true, data };
   } catch (error: any) {
     return { success: false, error: error.message };

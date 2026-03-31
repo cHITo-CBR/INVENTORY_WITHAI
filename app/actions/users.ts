@@ -1,9 +1,10 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import pool from "@/lib/mysql";
 import { getCurrentUser } from "@/app/actions/auth";
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
+import { v4 as uuidv4 } from "uuid";
 
 export interface UserRow {
   id: string;
@@ -13,54 +14,50 @@ export interface UserRow {
   status: string;
   is_active: boolean;
   created_at: string;
-  roles: { name: string } | null;
+  role_name: string | null;
 }
 
 export async function getUsers(search?: string, roleFilter?: string): Promise<UserRow[]> {
   try {
-    const supabase = await createClient();
-    let query = supabase
-      .from("users")
-      .select("id, full_name, email, phone_number, status, is_active, created_at, roles(name)")
-      .order("created_at", { ascending: false });
+    let sql = `
+      SELECT u.*, r.name as role_name
+      FROM users u
+      LEFT JOIN roles r ON u.role_id = r.id
+      WHERE 1=1
+    `;
+    const params: any[] = [];
 
     if (roleFilter && roleFilter !== "all") {
-      const supabase = await createClient();
-      const { data: roleData } = await supabase
-        .from("roles")
-        .select("id")
-        .eq("name", roleFilter)
-        .single();
-      if (roleData) {
-        query = query.eq("role_id", roleData.id);
-      }
+      sql += " AND r.name = ?";
+      params.push(roleFilter);
     }
 
     if (search && search.trim()) {
-      query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
+      sql += " AND (u.full_name LIKE ? OR u.email LIKE ?)";
+      params.push(`%${search}%`, `%${search}%`);
     }
 
-    const { data, error } = await query;
-    if (error || !data) return [];
-    return data as any as UserRow[];
-  } catch {
+    sql += " ORDER BY u.created_at DESC";
+
+    const [rows] = await pool.execute(sql, params) as any;
+    return rows;
+  } catch (err) {
+    console.error("getUsers error:", err);
     return [];
   }
 }
 
 export async function getRoles(): Promise<{ id: number; name: string }[]> {
   try {
-    const supabase = await createClient();
-    const { data, error } = await supabase.from("roles").select("id, name").order("name");
-    if (error || !data) return [];
-    return data;
-  } catch {
+    const [rows] = await pool.execute("SELECT id, name FROM roles ORDER BY name") as any;
+    return rows;
+  } catch (err) {
+    console.error("getRoles error:", err);
     return [];
   }
 }
 
 export async function createUser(formData: FormData) {
-  const supabase = await createClient();
   const user = await getCurrentUser();
   if (!user || user.role !== "admin") {
     return { error: "Unauthorized" };
@@ -76,22 +73,28 @@ export async function createUser(formData: FormData) {
     return { error: "Missing required fields." };
   }
 
-  const passwordHash = await bcrypt.hash(password, 10);
+  try {
+    const passwordHash = await bcrypt.hash(password, 10);
+    const userId = uuidv4();
 
-  const { error } = await supabase.from("users").insert([
-    {
-      full_name: fullName,
-      email,
-      phone_number: phone || null,
-      password_hash: passwordHash,
-      role_id: parseInt(roleId),
-      status: "approved",
-      is_active: true,
-    },
-  ]);
+    await pool.execute(
+      "INSERT INTO users (id, full_name, email, phone_number, password_hash, role_id, status, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [
+        userId,
+        fullName,
+        email,
+        phone || null,
+        passwordHash,
+        parseInt(roleId),
+        "active",
+        true,
+      ]
+    );
 
-  if (error) return { error: error.message };
-
-  revalidatePath("/users");
-  return { success: true };
+    revalidatePath("/users");
+    return { success: true };
+  } catch (err: any) {
+    console.error("createUser error:", err);
+    return { error: err.message };
+  }
 }

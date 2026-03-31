@@ -1,10 +1,12 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import pool, { query } from "@/lib/mysql";
+import { login, logout, getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import bcrypt from "bcryptjs";
+import { randomUUID } from "crypto";
 
 export async function registerUser(prevState: any, formData: FormData) {
-  const supabase = await createClient();
   const fullName = formData.get("fullName") as string;
   const email = formData.get("email") as string;
   const phone = formData.get("phone") as string;
@@ -16,64 +18,35 @@ export async function registerUser(prevState: any, formData: FormData) {
   }
 
   try {
-    // Get role id
-    const { data: roleData, error: roleError } = await supabase
-      .from("roles")
-      .select("id")
-      .eq("name", roleName)
-      .single();
+    // 1. Get role id
+    const roles = await query<any[]>("SELECT id FROM roles WHERE name = ?", [roleName]);
+    const roleData = roles[0];
 
-    if (roleError || !roleData) {
+    if (!roleData) {
       return { error: "Invalid role selected." };
     }
 
-    // 1. Sign up with Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          role: roleName,
-        },
-      },
-    });
+    // 2. Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+    const userId = randomUUID();
 
-    if (authError) {
-      return { error: authError.message };
-    }
-
-    if (!authData.user) {
-      return { error: "Failed to create user account." };
-    }
-
-    // 2. Sync with public.users table
-    const { error: dbError } = await supabase.from("users").insert([
-      {
-        id: authData.user.id,
-        full_name: fullName,
-        email: email,
-        phone_number: phone,
-        role_id: roleData.id,
-        status: "pending",
-        is_active: false,
-      },
-    ]);
-
-    if (dbError) {
-      console.error("Database sync error:", dbError);
-      return { error: "Account created but profile sync failed. Please contact support." };
-    }
+    // 3. Insert into MySQL users table
+    await query(
+      "INSERT INTO users (id, full_name, email, phone_number, password_hash, role_id, status, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [userId, fullName, email, phone || null, passwordHash, roleData.id, "pending", false]
+    );
 
     return { success: true };
-  } catch (err) {
+  } catch (err: any) {
     console.error("Registration error:", err);
+    if (err.code === 'ER_DUP_ENTRY') {
+      return { error: "Email already exists." };
+    }
     return { error: "An unexpected error occurred during registration." };
   }
 }
 
 export async function loginUser(prevState: any, formData: FormData) {
-  const supabase = await createClient();
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
 
@@ -82,53 +55,46 @@ export async function loginUser(prevState: any, formData: FormData) {
   }
 
   try {
-    // 1. Sign in with Supabase
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    // 1. Find user in MySQL
+    const [users] = await pool.execute(
+      "SELECT u.*, r.name as role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.email = ?",
+      [email]
+    ) as any;
+    const user = users[0];
 
-    if (authError) {
+    if (!user) {
       return { error: "Invalid email or password." };
     }
 
-    // 2. Check user status in public.users
-    const { data: user, error: dbError } = await supabase
-      .from("users")
-      .select("*, roles(name)")
-      .eq("id", authData.user.id)
-      .single();
-
-    if (dbError || !user) {
-      await supabase.auth.signOut();
-      return { error: "User profile not found. Please contact support." };
+    // 2. Verify password
+    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+    if (!isPasswordValid) {
+      return { error: "Invalid email or password." };
     }
 
+    // 3. Check status
     if (user.status === "pending") {
-      await supabase.auth.signOut();
       return { error: "Waiting for admin approval. Your account is pending." };
     }
     
     if (user.status === "rejected") {
-      await supabase.auth.signOut();
-      return { error: `Account rejected. Reason: ${user.rejection_reason || "Not specified"}` };
+      return { error: "Account rejected." };
     }
 
     if (!user.is_active) {
-      await supabase.auth.signOut();
       return { error: "Account is inactive." };
     }
 
-    // 3. Update Auth Metadata to include role for middleware accessibility
-    // This is important if they signed up before role metadata was added or for role updates
-    const currentRole = user.roles?.name;
-    if (currentRole) {
-      await supabase.auth.updateUser({
-        data: { role: currentRole }
-      });
-    }
+    // 4. Create session
+    const sessionUser = {
+      id: user.id,
+      email: user.email,
+      full_name: user.full_name,
+      role: user.role_name,
+    };
+    await login(sessionUser);
 
-    return { success: true, role: currentRole };
+    return { success: true, role: user.role_name };
   } catch (err) {
     console.error("Login error:", err);
     return { error: "An unexpected error occurred during login." };
@@ -136,27 +102,18 @@ export async function loginUser(prevState: any, formData: FormData) {
 }
 
 export async function logoutUser() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
+  await logout();
   redirect("/login");
 }
 
 export async function getCurrentUser() {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error } = await supabase.auth.getUser();
-    if (error || !user) return null;
-
-    const userData = {
-      id: user.id,
-      email: user.email,
-      role: user.user_metadata?.role,
-      full_name: user.user_metadata?.full_name
-    };
+    const session = await getSession();
+    if (!session || !session.user) return null;
 
     return {
-      ...userData,
-      user: userData
+      ...session.user,
+      user: session.user
     };
   } catch (err) {
     console.error("Get current user error:", err);

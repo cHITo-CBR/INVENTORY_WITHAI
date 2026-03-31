@@ -1,7 +1,8 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
+import { query } from "@/lib/mysql";
 import { revalidatePath } from "next/cache";
+import { randomUUID } from "crypto";
 
 export type CallsheetStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
 
@@ -32,43 +33,34 @@ export interface CreateCallsheetInput {
  * Creates a new callsheet and its associated items.
  */
 export async function createCallsheet(input: CreateCallsheetInput) {
+  const callsheetId = randomUUID();
   try {
     const { salesman_id, customer_id, visit_date, period_start, period_end, round_number, remarks, items } = input;
 
     // 1. Create the callsheet header
-    const { data: callsheet, error: callsheetError } = await supabase
-      .from("callsheets")
-      .insert({
-        salesman_id,
-        customer_id,
-        visit_date,
-        period_start,
-        period_end,
-        round_number,
-        remarks,
-        status: "draft",
-      })
-      .select()
-      .single();
-
-    if (callsheetError) throw callsheetError;
+    await query(
+      `INSERT INTO callsheets (id, salesman_id, customer_id, visit_date, period_start, period_end, round_number, remarks, status) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft')`,
+      [callsheetId, salesman_id, customer_id, visit_date, period_start, period_end, round_number, remarks]
+    );
 
     // 2. Insert items
     if (items.length > 0) {
-      const itemsToInsert = items.map(item => ({
-        callsheet_id: callsheet.id,
-        ...item
-      }));
-
-      const { error: itemsError } = await supabase
-        .from("callsheet_items")
-        .insert(itemsToInsert);
-
-      if (itemsError) throw itemsError;
+      for (const item of items) {
+        await query(
+          `INSERT INTO callsheet_items (id, callsheet_id, product_id, packing, p3, ig, inventory_cs, inventory_pcs, suggested_order, final_order, actual) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            randomUUID(), callsheetId, item.product_id, item.packing, 
+            item.p3 || 0, item.ig || 0, item.inventory_cs || 0, item.inventory_pcs || 0, 
+            item.suggested_order || 0, item.final_order || 0, item.actual || 0
+          ]
+        );
+      }
     }
 
     revalidatePath("/salesman/callsheets");
-    return { success: true, data: callsheet };
+    return { success: true, data: { id: callsheetId } };
   } catch (error: any) {
     console.error("createCallsheet error:", error);
     return { success: false, error: error.message };
@@ -80,12 +72,10 @@ export async function createCallsheet(input: CreateCallsheetInput) {
  */
 export async function submitCallsheet(callsheetId: string) {
   try {
-    const { error } = await supabase
-      .from("callsheets")
-      .update({ status: "submitted", updated_at: new Date().toISOString() })
-      .eq("id", callsheetId);
-
-    if (error) throw error;
+    await query(
+      "UPDATE callsheets SET status = 'submitted', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      [callsheetId]
+    );
 
     revalidatePath("/salesman/dashboard");
     revalidatePath("/salesman/callsheets");
@@ -100,16 +90,15 @@ export async function submitCallsheet(callsheetId: string) {
  */
 export async function getSalesmanCallsheets(salesmanId: string) {
   try {
-    const { data, error } = await supabase
-      .from("callsheets")
-      .select(`
-        *,
-        customers (store_name)
-      `)
-      .eq("salesman_id", salesmanId)
-      .order("created_at", { ascending: false });
+    const data = await query<any[]>(
+      `SELECT cs.*, c.store_name 
+       FROM callsheets cs
+       LEFT JOIN customers c ON cs.customer_id = c.id
+       WHERE cs.salesman_id = ? 
+       ORDER BY cs.created_at DESC`,
+      [salesmanId]
+    );
 
-    if (error) throw error;
     return { success: true, data };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -121,18 +110,22 @@ export async function getSalesmanCallsheets(salesmanId: string) {
  */
 export async function getCallsheetWithItems(callsheetId: string) {
   try {
-    const { data: callsheet, error: callsheetError } = await supabase
-      .from("callsheets")
-      .select(`
-        *,
-        customers (store_name),
-        callsheet_items (*)
-      `)
-      .eq("id", callsheetId)
-      .single();
+    const [callsheet] = await query<any[]>(
+      `SELECT cs.*, c.store_name 
+       FROM callsheets cs
+       LEFT JOIN customers c ON cs.customer_id = c.id
+       WHERE cs.id = ?`,
+      [callsheetId]
+    );
 
-    if (callsheetError) throw callsheetError;
-    return { success: true, data: callsheet };
+    if (!callsheet) return { success: false, error: "Callsheet not found" };
+
+    const items = await query<any[]>(
+      "SELECT * FROM callsheet_items WHERE callsheet_id = ?",
+      [callsheetId]
+    );
+
+    return { success: true, data: { ...callsheet, callsheet_items: items } };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -147,16 +140,14 @@ export async function getCallsheetWithItems(callsheetId: string) {
  */
 export async function getAllCallsheets() {
   try {
-    const { data, error } = await supabase
-      .from("callsheets")
-      .select(`
-        *,
-        customers (store_name),
-        users:salesman_id (full_name)
-      `)
-      .order("created_at", { ascending: false });
+    const data = await query<any[]>(
+      `SELECT cs.*, c.store_name, u.full_name as salesman_name
+       FROM callsheets cs
+       LEFT JOIN customers c ON cs.customer_id = c.id
+       LEFT JOIN users u ON cs.salesman_id = u.id
+       ORDER BY cs.created_at DESC`
+    );
 
-    if (error) throw error;
     return data || [];
   } catch (error: any) {
     console.error("getAllCallsheets error:", error);
@@ -169,12 +160,10 @@ export async function getAllCallsheets() {
  */
 export async function updateCallsheetStatus(callsheetId: string, status: CallsheetStatus) {
   try {
-    const { error } = await supabase
-      .from("callsheets")
-      .update({ status, updated_at: new Date().toISOString() })
-      .eq("id", callsheetId);
-
-    if (error) throw error;
+    await query(
+      "UPDATE callsheets SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      [status, callsheetId]
+    );
 
     revalidatePath("/callsheets");
     revalidatePath("/salesman/callsheets");

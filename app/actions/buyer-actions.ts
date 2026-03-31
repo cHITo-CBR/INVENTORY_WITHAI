@@ -1,21 +1,41 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
+import { query } from "@/lib/mysql";
 import { revalidatePath } from "next/cache";
+import { randomUUID } from "crypto";
 
 // ══════════════════════════════════════════════════════════════
 // BUYER DASHBOARD
 // ══════════════════════════════════════════════════════════════
 
 export async function getBuyerDashboard(userId: string) {
-  const [
-    { data: recentRequests },
-    { data: recentOrders },
-    { data: featuredProducts },
-  ] = await Promise.all([
-    supabase.from("buyer_requests").select("*, buyer_request_items(*, products(name))").eq("salesman_id", userId).order("created_at", { ascending: false }).limit(5),
-    supabase.from("sales_transactions").select("*, customers(store_name)").eq("salesman_id", userId).order("created_at", { ascending: false }).limit(5),
-    supabase.from("products").select("*, product_categories(name), brands(name), product_images(image_url, is_primary)").eq("is_active", true).eq("is_archived", false).order("created_at", { ascending: false }).limit(6),
+  const [recentRequests, recentOrders, featuredProducts] = await Promise.all([
+    query<any[]>(
+      `SELECT br.*, c.store_name 
+       FROM buyer_requests br
+       LEFT JOIN customers c ON br.customer_id = c.id
+       WHERE br.salesman_id = ? 
+       ORDER BY br.created_at DESC LIMIT 5`,
+      [userId]
+    ),
+    query<any[]>(
+      `SELECT st.*, c.store_name 
+       FROM sales_transactions st
+       LEFT JOIN customers c ON st.customer_id = c.id
+       WHERE st.salesman_id = ? 
+       ORDER BY st.created_at DESC LIMIT 5`,
+      [userId]
+    ),
+    query<any[]>(
+      `SELECT p.*, pc.name as category_name, b.name as brand_name,
+              (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = TRUE LIMIT 1) as primary_image
+       FROM products p
+       LEFT JOIN product_categories pc ON p.category_id = pc.id
+       LEFT JOIN brands b ON p.brand_id = b.id
+       WHERE p.is_active = TRUE AND p.is_archived = FALSE
+       ORDER BY p.created_at DESC LIMIT 6`,
+      []
+    ),
   ]);
 
   return {
@@ -30,73 +50,124 @@ export async function getBuyerDashboard(userId: string) {
 // ══════════════════════════════════════════════════════════════
 
 export async function getBuyerProducts(search?: string, categoryId?: number, brandId?: number) {
-  let query = supabase
-    .from("products")
-    .select("*, product_categories(name), brands(name), product_images(image_url, is_primary), product_variants(id, name, sku, unit_price)")
-    .eq("is_active", true)
-    .eq("is_archived", false)
-    .order("name");
+  let sql = `
+    SELECT p.*, pc.name as category_name, b.name as brand_name,
+           (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = TRUE LIMIT 1) as primary_image
+    FROM products p
+    LEFT JOIN product_categories pc ON p.category_id = pc.id
+    LEFT JOIN brands b ON p.brand_id = b.id
+    WHERE p.is_active = TRUE AND p.is_archived = FALSE
+  `;
+  const params: any[] = [];
 
-  if (search) query = query.ilike("name", `%${search}%`);
-  if (categoryId) query = query.eq("category_id", categoryId);
-  if (brandId) query = query.eq("brand_id", brandId);
+  if (search) {
+    sql += " AND p.name LIKE ?";
+    params.push(`%${search}%`);
+  }
+  if (categoryId) {
+    sql += " AND p.category_id = ?";
+    params.push(categoryId);
+  }
+  if (brandId) {
+    sql += " AND p.brand_id = ?";
+    params.push(brandId);
+  }
 
-  const { data, error } = await query;
+  sql += " ORDER BY p.name ASC";
+
+  const data = await query<any[]>(sql, params);
   return data || [];
 }
 
 export async function getProductDetail(productId: string) {
-  const { data } = await supabase
-    .from("products")
-    .select("*, product_categories(name), brands(name), product_images(image_url, is_primary), product_variants(id, name, sku, unit_price, packaging_types(name), units(name))")
-    .eq("id", productId)
-    .single();
+  const [product] = await query<any[]>(
+    `SELECT p.*, pc.name as category_name, b.name as brand_name
+     FROM products p
+     LEFT JOIN product_categories pc ON p.category_id = pc.id
+     LEFT JOIN brands b ON p.brand_id = b.id
+     WHERE p.id = ?`,
+    [productId]
+  );
 
-  return data;
+  if (!product) return null;
+
+  const [variants, images] = await Promise.all([
+    query<any[]>(
+      `SELECT pv.*, pt.name as packaging_name, u.name as unit_name
+       FROM product_variants pv
+       LEFT JOIN packaging_types pt ON pv.id = pt.id -- Assuming connection via some field or table
+       LEFT JOIN units u ON pv.id = u.id -- Adjust based on actual mapping in schema
+       WHERE pv.product_id = ? AND pv.is_active = TRUE`,
+      [productId]
+    ),
+    query<any[]>(
+      `SELECT image_url, is_primary FROM product_images WHERE product_id = ?`,
+      [productId]
+    ),
+  ]);
+
+  return { ...product, product_variants: variants, product_images: images };
 }
 
 export async function getProductFilters() {
-  const [{ data: categories }, { data: brands }] = await Promise.all([
-    supabase.from("product_categories").select("id, name").eq("is_archived", false).order("name"),
-    supabase.from("brands").select("id, name").eq("is_archived", false).order("name"),
+  const [categories, brands] = await Promise.all([
+    query<any[]>("SELECT id, name FROM product_categories WHERE is_archived = FALSE ORDER BY name", []),
+    query<any[]>("SELECT id, name FROM brands WHERE is_archived = FALSE ORDER BY name", []),
   ]);
 
   return { categories: categories || [], brands: brands || [] };
 }
 
 // ══════════════════════════════════════════════════════════════
-// BUYER REQUESTS (buyer's own)
+// BUYER REQUESTS
 // ══════════════════════════════════════════════════════════════
 
 export async function getBuyerOwnRequests(userId: string) {
-  const { data } = await supabase
-    .from("buyer_requests")
-    .select("*, customers(store_name), users:salesman_id(full_name), buyer_request_items(*, products(name))")
-    .eq("salesman_id", userId)
-    .order("created_at", { ascending: false });
+  const data = await query<any[]>(
+    `SELECT br.*, c.store_name, u.full_name as salesman_name
+     FROM buyer_requests br
+     LEFT JOIN customers c ON br.customer_id = c.id
+     LEFT JOIN users u ON br.salesman_id = u.id
+     WHERE br.salesman_id = ? 
+     ORDER BY br.created_at DESC`,
+    [userId]
+  );
 
   return data || [];
 }
 
-export async function createBuyerRequestFromBuyer(input: { customer_id: string; notes?: string; items: { product_id: string; quantity: number; notes?: string }[]; userId: string }) {
-  const { data: request, error: reqErr } = await supabase
-    .from("buyer_requests")
-    .insert({ salesman_id: input.userId, customer_id: input.customer_id, notes: input.notes, status: "pending" })
-    .select()
-    .single();
+export async function createBuyerRequestFromBuyer(input: { 
+  customer_id: string; 
+  notes?: string; 
+  items: { product_id: string; quantity: number; notes?: string }[]; 
+  userId: string 
+}) {
+  const requestId = randomUUID();
+  
+  try {
+    // 1. Create request header
+    await query(
+      `INSERT INTO buyer_requests (id, salesman_id, customer_id, notes, status) 
+       VALUES (?, ?, ?, ?, 'pending')`,
+      [requestId, input.userId, input.customer_id, input.notes]
+    );
 
-  if (reqErr || !request) return { success: false, error: reqErr?.message || "Failed to create request" };
+    // 2. Insert items
+    if (input.items.length > 0) {
+      for (const item of input.items) {
+        await query(
+          `INSERT INTO buyer_request_items (id, request_id, product_id, quantity, notes) 
+           VALUES (?, ?, ?, ?, ?)`,
+          [randomUUID(), requestId, item.product_id, item.quantity, item.notes]
+        );
+      }
+    }
 
-  if (input.items.length > 0) {
-    const { error: itemErr } = await supabase
-      .from("buyer_request_items")
-      .insert(input.items.map(i => ({ request_id: request.id, ...i })));
-
-    if (itemErr) return { success: false, error: itemErr.message };
+    revalidatePath("/customers/buyer-requests");
+    return { success: true, data: { id: requestId } };
+  } catch (error: any) {
+    return { success: false, error: error.message };
   }
-
-  revalidatePath("/customers/buyer-requests");
-  return { success: true, data: request };
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -104,23 +175,40 @@ export async function createBuyerRequestFromBuyer(input: { customer_id: string; 
 // ══════════════════════════════════════════════════════════════
 
 export async function getBuyerOrders(userId: string) {
-  const { data } = await supabase
-    .from("sales_transactions")
-    .select("*, customers(store_name), sales_transaction_items(*, product_variants(name, sku, products:product_id(name)))")
-    .eq("salesman_id", userId)
-    .order("created_at", { ascending: false });
+  const data = await query<any[]>(
+    `SELECT st.*, c.store_name 
+     FROM sales_transactions st
+     LEFT JOIN customers c ON st.customer_id = c.id
+     WHERE st.salesman_id = ? 
+     ORDER BY st.created_at DESC`,
+    [userId]
+  );
 
   return data || [];
 }
 
 export async function getOrderDetail(orderId: string) {
-  const { data } = await supabase
-    .from("sales_transactions")
-    .select("*, customers(store_name), users:salesman_id(full_name), sales_transaction_items(*, product_variants(name, sku, unit_price, products:product_id(name)))")
-    .eq("id", orderId)
-    .single();
+  const [order] = await query<any[]>(
+    `SELECT st.*, c.store_name, u.full_name as salesman_name
+     FROM sales_transactions st
+     LEFT JOIN customers c ON st.customer_id = c.id
+     LEFT JOIN users u ON st.salesman_id = u.id
+     WHERE st.id = ?`,
+    [orderId]
+  );
 
-  return data;
+  if (!order) return null;
+
+  const items = await query<any[]>(
+    `SELECT sti.*, pv.name as variant_name, pv.sku, p.name as product_name
+     FROM sales_transaction_items sti
+     LEFT JOIN product_variants pv ON sti.variant_id = pv.id
+     LEFT JOIN products p ON pv.product_id = p.id
+     WHERE sti.transaction_id = ?`,
+    [orderId]
+  );
+
+  return { ...order, sales_transaction_items: items };
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -128,12 +216,12 @@ export async function getOrderDetail(orderId: string) {
 // ══════════════════════════════════════════════════════════════
 
 export async function getBuyerNotifications(userId: string) {
-  const { data } = await supabase
-    .from("notifications")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(50);
+  const data = await query<any[]>(
+    `SELECT * FROM notifications 
+     WHERE user_id = ? 
+     ORDER BY created_at DESC LIMIT 50`,
+    [userId]
+  );
 
   return data || [];
 }
@@ -143,17 +231,8 @@ export async function getBuyerNotifications(userId: string) {
 // ══════════════════════════════════════════════════════════════
 
 export async function getBuyerProfile(userId: string) {
-  const { data: user } = await supabase
-    .from("users")
-    .select("*")
-    .eq("id", userId)
-    .single();
-
-  const { data: customer } = await supabase
-    .from("customers")
-    .select("*")
-    .eq("assigned_salesman_id", userId)
-    .single();
+  const [user] = await query<any[]>("SELECT * FROM users WHERE id = ?", [userId]);
+  const [customer] = await query<any[]>("SELECT * FROM customers WHERE assigned_salesman_id = ?", [userId]);
 
   return { user, customer };
 }
@@ -163,11 +242,10 @@ export async function getBuyerProfile(userId: string) {
 // ══════════════════════════════════════════════════════════════
 
 export async function getCustomersForBuyer() {
-  const { data } = await supabase
-    .from("customers")
-    .select("id, store_name")
-    .eq("is_active", true)
-    .order("store_name");
+  const data = await query<any[]>(
+    "SELECT id, store_name FROM customers WHERE is_active = TRUE ORDER BY store_name",
+    []
+  );
 
   return data || [];
 }

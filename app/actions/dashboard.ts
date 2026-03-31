@@ -1,6 +1,6 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
+import pool from "@/lib/mysql";
 
 export interface DashboardKPIs {
   totalUsers: number;
@@ -24,81 +24,84 @@ export interface LowStockItem {
   balance: number;
 }
 
-async function safeCount(table: string, filter?: { column: string; value: string | number }): Promise<number> {
-  try {
-    let query = supabase.from(table).select("*", { count: "exact", head: true });
-    if (filter) {
-      query = query.eq(filter.column, filter.value);
-    }
-    const { count, error } = await query;
-    if (error) return 0;
-    return count ?? 0;
-  } catch {
-    return 0;
-  }
-}
-
 export async function getDashboardKPIs(): Promise<DashboardKPIs> {
-  const [totalUsers, pendingApprovals, totalCustomers, totalProducts] = await Promise.all([
-    safeCount("users"),
-    safeCount("users", { column: "status", value: "pending" }),
-    safeCount("users", { column: "role_id", value: 4 }), // Role ID 4 is for 'buyer'
-    safeCount("products"),
-  ]);
+  try {
+    const [[userCount]] = await pool.execute("SELECT COUNT(*) as count FROM users") as any;
+    const [[pendingCount]] = await pool.execute("SELECT COUNT(*) as count FROM users WHERE status = 'pending'") as any;
+    const [[customerCount]] = await pool.execute("SELECT COUNT(*) as count FROM customers") as any;
+    const [[productCount]] = await pool.execute("SELECT COUNT(*) as count FROM products") as any;
+    
+    // Low stock: count variants whose latest balance is < 10
+    const [lowStockRows] = await pool.execute(`
+      SELECT COUNT(*) as count FROM (
+        SELECT balance FROM inventory_ledger il1
+        WHERE created_at = (
+          SELECT MAX(created_at) FROM inventory_ledger il2 
+          WHERE il2.variant_id = il1.variant_id
+        )
+        AND balance < 10
+      ) as sub
+    `) as any;
 
-  // These require tables that may not exist yet
-  const lowStockItems = 0;
-  const totalSales = 0;
+    // Total sales: sum of total_amount from completed/approved transactions
+    const [[salesSum]] = await pool.execute("SELECT SUM(total_amount) as total FROM sales_transactions WHERE status = 'completed' OR status = 'approved'") as any;
 
-  return {
-    totalUsers,
-    pendingApprovals,
-    totalCustomers,
-    totalProducts,
-    lowStockItems,
-    totalSales,
-  };
+    return {
+      totalUsers: userCount?.count ?? 0,
+      pendingApprovals: pendingCount?.count ?? 0,
+      totalCustomers: customerCount?.count ?? 0,
+      totalProducts: productCount?.count ?? 0,
+      lowStockItems: lowStockRows[0]?.count ?? 0,
+      totalSales: salesSum?.total ?? 0,
+    };
+  } catch (err) {
+    console.error("getDashboardKPIs error:", err);
+    return {
+      totalUsers: 0,
+      pendingApprovals: 0,
+      totalCustomers: 0,
+      totalProducts: 0,
+      lowStockItems: 0,
+      totalSales: 0,
+    };
+  }
 }
 
 export async function getRecentTransactions(): Promise<RecentTransaction[]> {
   try {
-    const { data, error } = await supabase
-      .from("sales_transactions")
-      .select("id, total_amount, status, created_at, customers(store_name)")
-      .order("created_at", { ascending: false })
-      .limit(5);
+    const [rows] = await pool.execute(`
+      SELECT st.id, st.total_amount, st.status, st.created_at, c.store_name as customer_name
+      FROM sales_transactions st
+      JOIN customers c ON st.customer_id = c.id
+      ORDER BY st.created_at DESC
+      LIMIT 5
+    `) as any;
 
-    if (error || !data) return [];
-
-    return data.map((t: any) => ({
-      id: t.id,
-      customer_name: t.customers?.store_name ?? "Unknown",
-      total_amount: t.total_amount ?? 0,
-      status: t.status ?? "unknown",
-      created_at: t.created_at,
-    }));
-  } catch {
+    return rows;
+  } catch (err) {
+    console.error("getRecentTransactions error:", err);
     return [];
   }
 }
 
 export async function getLowStockItems(): Promise<LowStockItem[]> {
-  // This will return empty until inventory_ledger table exists
   try {
-    const { data, error } = await supabase
-      .from("inventory_ledger")
-      .select("balance, product_variants(name)")
-      .lt("balance", 10)
-      .order("balance", { ascending: true })
-      .limit(5);
+    const [rows] = await pool.execute(`
+      SELECT pv.name as variant_name, il.balance
+      FROM inventory_ledger il
+      JOIN product_variants pv ON il.variant_id = pv.id
+      WHERE il.created_at = (
+        SELECT MAX(created_at) FROM inventory_ledger il2 
+        WHERE il2.variant_id = il.variant_id
+      )
+      AND il.balance < 10
+      ORDER BY il.balance ASC
+      LIMIT 5
+    `) as any;
 
-    if (error || !data) return [];
-
-    return data.map((item: any) => ({
-      variant_name: item.product_variants?.name ?? "Unknown SKU",
-      balance: item.balance ?? 0,
-    }));
-  } catch {
+    return rows;
+  } catch (err) {
+    console.error("getLowStockItems error:", err);
     return [];
   }
 }

@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { query } from "@/lib/mysql";
 import { getCurrentUser } from "@/app/actions/auth";
 import { revalidatePath } from "next/cache";
 
@@ -15,66 +15,65 @@ export interface NotificationRow {
 
 export async function getNotifications(): Promise<NotificationRow[]> {
   try {
-    const supabase = await createClient();
     const user = await getCurrentUser();
     if (!user) return [];
 
-    const { data, error } = await supabase
-      .from("notifications")
-      .select("id, title, message, type, is_read, created_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
+    const rows = await query<NotificationRow[]>(
+      "SELECT id, title, message, type, is_read, created_at FROM notifications WHERE user_id = ? ORDER BY created_at DESC",
+      [user.id]
+    );
 
-    if (error || !data) return [];
-    return data;
-  } catch {
+    return rows || [];
+  } catch (error) {
+    console.error("getNotifications error:", error);
     return [];
   }
 }
 
 export async function getUnreadCount(): Promise<number> {
   try {
-    const supabase = await createClient();
     const user = await getCurrentUser();
     if (!user) return 0;
 
-    const { count, error } = await supabase
-      .from("notifications")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .eq("is_read", false);
+    const [result] = await query<any[]>(
+      "SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = FALSE",
+      [user.id]
+    );
 
-    if (error) return 0;
-    return count ?? 0;
-  } catch {
+    return result?.count ?? 0;
+  } catch (error) {
+    console.error("getUnreadCount error:", error);
     return 0;
   }
 }
 
 export async function markNotificationRead(id: string) {
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("notifications")
-    .update({ is_read: true })
-    .eq("id", id);
+  try {
+    await query(
+      "UPDATE notifications SET is_read = TRUE WHERE id = ?",
+      [id]
+    );
 
-  if (error) return { error: error.message };
-  revalidatePath("/notifications");
-  return { success: true };
+    revalidatePath("/notifications");
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
 }
 
 export async function markAllRead() {
-  const supabase = await createClient();
-  const user = await getCurrentUser();
-  if (!user) return { error: "Unauthorized" };
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { error: "Unauthorized" };
 
-  const { error } = await supabase
-    .from("notifications")
-    .update({ is_read: true })
-    .eq("user_id", user.id)
-    .eq("is_read", false);
+    await query(
+      "UPDATE notifications SET is_read = TRUE WHERE user_id = ? AND is_read = FALSE",
+      [user.id]
+    );
 
-  if (error) return { error: error.message };
-  revalidatePath("/notifications");
-  return { success: true };
+    revalidatePath("/notifications");
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
 }
