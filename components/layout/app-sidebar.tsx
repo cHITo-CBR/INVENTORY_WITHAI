@@ -3,24 +3,24 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { 
-  BarChart3, 
-  Box, 
-  CheckSquare, 
-  ClipboardList, 
-  FileText, 
-  Home, 
-  LayoutDashboard, 
-  MapPin, 
-  Package, 
-  Package2, 
-  Settings, 
-  ShieldAlert, 
-  ShoppingCart, 
+import {
+  BarChart3,
+  Box,
+  CheckSquare,
+  ClipboardList,
+  FileText,
+  Home,
+  LayoutDashboard,
+  MapPin,
+  Package,
+  Package2,
+  Settings,
+  ShieldAlert,
+  ShoppingCart,
   ShoppingBag,
-  Sparkles, 
-  Tags, 
-  Users, 
+  Sparkles,
+  Tags,
+  Users,
   Bell,
   Archive
 } from "lucide-react";
@@ -110,14 +110,14 @@ export function AppSidebar({ basePath = "/admin" }: AppSidebarProps) {
       const isActive = pathname === url || pathname.startsWith(url + "/");
       return (
         <SidebarMenuItem key={item.title}>
-          <SidebarMenuButton 
-            asChild 
+          <SidebarMenuButton
+            asChild
             isActive={isActive}
-            className="font-medium text-gray-700 data-[active=true]:bg-[#E2EBE5] data-[active=true]:text-[#005914] data-[active=true]:font-bold hover:bg-gray-50"
+            className="font-medium text-gray-700 data-[active=true]:bg-[#E2EBE5] data-[active=true]:text-[#005914] data-[active=true]:font-bold hover:bg-gray-50 h-[clamp(1.75rem,4vh,2.25rem)] text-[clamp(13px,1.5vh,14px)]"
           >
             <Link href={url}>
-              <item.icon className="w-5 h-5 mr-1" />
-              <span>{item.title}</span>
+              <item.icon className="w-4.5 h-4.5 mr-1 shrink-0" />
+              <span className="truncate">{item.title}</span>
             </Link>
           </SidebarMenuButton>
         </SidebarMenuItem>
@@ -126,15 +126,21 @@ export function AppSidebar({ basePath = "/admin" }: AppSidebarProps) {
 
   return (
     <Sidebar variant="inset" className="border-r border-gray-200">
-      <SidebarHeader className="bg-white px-4 py-4 md:py-6">
+      <SidebarHeader className="bg-white px-4 py-[clamp(0.5rem,2.5vh,1.5rem)] transition-all duration-300">
         <Link href={prefixed("/dashboard")} className="flex items-center gap-2">
-          <Image src="/logo.png" alt="Century Pacific Food" width={140} height={32} className="h-8 w-auto object-contain" />
+          <Image 
+            src="/logo.png" 
+            alt="Century Pacific Food" 
+            width={140} 
+            height={32} 
+            className="h-[clamp(1.25rem,4vh,2rem)] min-h-[20px] w-auto object-contain transition-all duration-300" 
+          />
         </Link>
       </SidebarHeader>
 
       <SidebarContent className="bg-white">
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-[#005914] font-semibold text-xs tracking-wider uppercase mb-1">
+        <SidebarGroup className="p-[clamp(0.25rem,1vh,0.5rem)]">
+          <SidebarGroupLabel className="text-[#005914] font-semibold text-[clamp(10px,1.3vh,12px)] tracking-wider uppercase mb-0.5 h-[clamp(1.5rem,3.5vh,2rem)]">
             Main
           </SidebarGroupLabel>
           <SidebarMenu>
@@ -150,14 +156,14 @@ export function AppSidebar({ basePath = "/admin" }: AppSidebarProps) {
                 const isActive = pathname === url || pathname.startsWith(url + "/");
                 return (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton 
-                      asChild 
+                    <SidebarMenuButton
+                      asChild
                       isActive={isActive}
-                      className="font-medium text-gray-700 data-[active=true]:bg-[#E2EBE5] data-[active=true]:text-[#005914] data-[active=true]:font-bold hover:bg-gray-50"
+                      className="font-medium text-gray-700 data-[active=true]:bg-[#E2EBE5] data-[active=true]:text-[#005914] data-[active=true]:font-bold hover:bg-gray-50 h-[clamp(1.75rem,4vh,2.25rem)] text-[clamp(13px,1.5vh,14px)]"
                     >
                       <Link href={url}>
-                        <item.icon className="w-5 h-5 mr-1" />
-                        <span>{item.title}</span>
+                        <item.icon className="w-4.5 h-4.5 mr-1 shrink-0" />
+                        <span className="truncate">{item.title}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -166,22 +172,22 @@ export function AppSidebar({ basePath = "/admin" }: AppSidebarProps) {
           </SidebarMenu>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-[#005914] font-semibold text-xs tracking-wider uppercase mb-1">
+        <SidebarGroup className="p-[clamp(0.25rem,1vh,0.5rem)]">
+          <SidebarGroupLabel className="text-[#005914] font-semibold text-[clamp(10px,1.3vh,12px)] tracking-wider uppercase mb-0.5 h-[clamp(1.5rem,3.5vh,2rem)]">
             Product Catalog
           </SidebarGroupLabel>
           <SidebarMenu>{renderMenuItems(catalogItems)}</SidebarMenu>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-[#005914] font-semibold text-xs tracking-wider uppercase mb-1">
+        <SidebarGroup className="p-[clamp(0.25rem,1vh,0.5rem)]">
+          <SidebarGroupLabel className="text-[#005914] font-semibold text-[clamp(10px,1.3vh,12px)] tracking-wider uppercase mb-0.5 h-[clamp(1.5rem,3.5vh,2rem)]">
             Operations
           </SidebarGroupLabel>
           <SidebarMenu>{renderMenuItems(operationsItems)}</SidebarMenu>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-[#005914] font-semibold text-xs tracking-wider uppercase mb-1">
+        <SidebarGroup className="p-[clamp(0.25rem,1vh,0.5rem)]">
+          <SidebarGroupLabel className="text-[#005914] font-semibold text-[clamp(10px,1.3vh,12px)] tracking-wider uppercase mb-0.5 h-[clamp(1.5rem,3.5vh,2rem)]">
             Field Sales
           </SidebarGroupLabel>
           <SidebarMenu>{renderMenuItems(fieldSalesItems)}</SidebarMenu>
@@ -189,9 +195,9 @@ export function AppSidebar({ basePath = "/admin" }: AppSidebarProps) {
 
         {(user?.role === "admin" || user?.role === "supervisor") && (
           <SidebarGroup>
-            <SidebarGroupLabel className="text-[#005914] font-semibold text-xs tracking-wider uppercase mb-1">
-              Analytics & System
-            </SidebarGroupLabel>
+          <SidebarGroupLabel className="text-[#005914] font-semibold text-[clamp(10px,1.3vh,12px)] tracking-wider uppercase mb-0.5 h-[clamp(1.5rem,3.5vh,2rem)]">
+            Analytics & System
+          </SidebarGroupLabel>
             <SidebarMenu>
               {[...analyticsItems, ...systemItems]
                 .filter((item) => {
@@ -207,11 +213,11 @@ export function AppSidebar({ basePath = "/admin" }: AppSidebarProps) {
                       <SidebarMenuButton
                         asChild
                         isActive={isActive}
-                        className="font-medium text-gray-700 data-[active=true]:bg-[#E2EBE5] data-[active=true]:text-[#005914] data-[active=true]:font-bold hover:bg-gray-50"
+                        className="font-medium text-gray-700 data-[active=true]:bg-[#E2EBE5] data-[active=true]:text-[#005914] data-[active=true]:font-bold hover:bg-gray-50 h-[clamp(1.75rem,4vh,2.25rem)] text-[clamp(13px,1.5vh,14px)]"
                       >
                         <Link href={url}>
-                          <item.icon className="w-5 h-5 mr-1" />
-                          <span>{item.title}</span>
+                          <item.icon className="w-4.5 h-4.5 mr-1 shrink-0" />
+                          <span className="truncate">{item.title}</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>

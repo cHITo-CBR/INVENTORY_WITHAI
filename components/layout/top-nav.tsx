@@ -46,16 +46,16 @@ export function TopNav() {
     <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-gray-200 bg-white px-6 shadow-sm transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-16">
       <div className="flex items-center gap-4 flex-1">
         <SidebarTrigger className="-ml-2 text-gray-500 hover:text-[#005914]" />
-        
+
         {/* Global Search */}
         <div className="hidden sm:flex relative max-w-md w-full ml-4 group z-50">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input 
+          <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onFocus={() => query.length >= 2 && setSearchOpen(true)}
             onBlur={() => setTimeout(() => setSearchOpen(false), 200)}
-            placeholder="Search products, customers, users..." 
+            placeholder="Search products, customers, users..."
             className="pl-10 bg-gray-50 border-gray-200 h-10 rounded-full focus-visible:ring-[#005914] w-full"
           />
           {searchOpen && (
@@ -98,9 +98,9 @@ export function TopNav() {
             )}
           </Button>
         </Link>
-        <Button 
-          variant="ghost" 
-          size="icon" 
+        <Button
+          variant="ghost"
+          size="icon"
           className="text-gray-500 hover:text-[#005914] hover:bg-gray-50 rounded-full dark:hover:bg-gray-800"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
         >
@@ -108,9 +108,9 @@ export function TopNav() {
           <Moon className="hidden h-5 w-5 dark:block" />
           <span className="sr-only">Toggle theme</span>
         </Button>
-        <Button 
-          variant="ghost" 
-          size="icon" 
+        <Button
+          variant="ghost"
+          size="icon"
           className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full dark:hover:bg-red-900/30"
           onClick={() => logoutUser()}
           title="Sign out"
