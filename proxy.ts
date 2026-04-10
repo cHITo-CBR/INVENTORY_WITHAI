@@ -62,14 +62,16 @@ async function updateSession(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     const { pathname } = request.nextUrl
 
-    // 1. Skip static assets, favicon, and images
+    // 1. Skip static assets, favicon, images, and Action requests to avoid JSON parse errors
     if (
       pathname.includes('.') ||
       pathname.startsWith('/_next') ||
-      pathname.startsWith('/api')
+      pathname.startsWith('/api') ||
+      request.headers.has('next-action')
     ) {
       return response
     }
+
 
     const isPublic = publicRoutes.some((r) => pathname.startsWith(r))
     const userRole = user?.user_metadata?.role as string | undefined

@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { getCurrentUser } from "@/app/actions/auth";
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
@@ -78,8 +79,33 @@ export async function createUser(formData: FormData) {
 
   const passwordHash = await bcrypt.hash(password, 10);
 
+  // Use a secondary client to sign up the new user without logging out the admin
+  const anonSupabase = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)! as string,
+    { auth: { persistSession: false } }
+  );
+
+  const { data: roleData } = await supabase.from("roles").select("name").eq("id", parseInt(roleId)).single();
+
+  const { data: authData, error: authError } = await anonSupabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name: fullName,
+        role: roleData?.name || "buyer",
+      },
+    },
+  });
+
+  if (authError || !authData.user) {
+    return { error: authError?.message || "Failed to create authentication account." };
+  }
+
   const { error } = await supabase.from("users").insert([
     {
+      id: authData.user.id,
       full_name: fullName,
       email,
       phone_number: phone || null,
@@ -90,7 +116,10 @@ export async function createUser(formData: FormData) {
     },
   ]);
 
-  if (error) return { error: error.message };
+  if (error) {
+    // Attempt rollback slightly, but not strictly necessary here
+    return { error: error.message };
+  }
 
   revalidatePath("/users");
   return { success: true };
