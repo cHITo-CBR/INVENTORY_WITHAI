@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, Suspense } from "react";
+import { useActionState, useState, Suspense, startTransition } from "react";
 import { registerUser } from "@/app/actions/auth";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -17,12 +17,9 @@ import Image from "next/image";
 function SignupForm() {
   const [state, formAction, pending] = useActionState(registerUser, null);
   const [passwordError, setPasswordError] = useState("");
-<<<<<<< HEAD
   const searchParams = useSearchParams();
   const isGooglePending = searchParams.get('success') === 'google_pending';
-=======
   const [selectedRole, setSelectedRole] = useState("buyer");
->>>>>>> Functionalitynalangsamagastakeholders1
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -36,7 +33,9 @@ function SignupForm() {
     }
 
     setPasswordError("");
-    formAction(formData);
+    startTransition(() => {
+      formAction(formData);
+    });
   };
 
   const handleGoogleSignup = async () => {
@@ -96,18 +95,7 @@ function SignupForm() {
             {(state?.error || passwordError) && (
               <Alert variant="destructive" className="py-2.5 px-3 rounded-lg bg-red-50 border-red-100 text-red-600">
                 <AlertCircle className="h-4 w-4" />
-<<<<<<< HEAD
                 <AlertDescription className="text-xs">{state?.error || passwordError}</AlertDescription>
-=======
-                <AlertDescription className="text-xs">{state.error}</AlertDescription>
-              </Alert>
-            )}
-
-            {passwordError && (
-              <Alert variant="destructive" className="py-2.5 px-3 rounded-lg bg-red-50 border-red-100 text-red-600">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription className="text-xs">{passwordError}</AlertDescription>
->>>>>>> Functionalitynalangsamagastakeholders1
               </Alert>
             )}
 
@@ -127,20 +115,6 @@ function SignupForm() {
               <Input id="phone" name="phone" type="text" placeholder="+1234567890" className="h-11 rounded-lg border-gray-300 focus-visible:ring-[#005914] px-4 shadow-sm" />
             </div>
 
-<<<<<<< HEAD
-            <div className="space-y-1.5 z-50 relative">
-              <Label htmlFor="role" className="text-[12px] font-semibold text-gray-700">Role</Label>
-              <Select name="role" required defaultValue="buyer">
-                <SelectTrigger id="role" className="h-11 rounded-lg border-gray-300 focus:ring-[#005914] bg-white">
-                  <SelectValue placeholder="Select a role" />
-                </SelectTrigger>
-                <SelectContent className="z-50 bg-white">
-                  <SelectItem value="buyer">Buyer</SelectItem>
-                  <SelectItem value="salesman">Salesman</SelectItem>
-                  <SelectItem value="supervisor">Supervisor</SelectItem>
-                </SelectContent>
-              </Select>
-=======
             {/* Role Selection Grid */}
             <div className="space-y-3 mb-6">
               <Label className="text-[13px] font-bold text-gray-800 uppercase tracking-wider">Choose Your Role</Label>
@@ -187,7 +161,6 @@ function SignupForm() {
                   </label>
                 ))}
               </div>
->>>>>>> Functionalitynalangsamagastakeholders1
             </div>
 
             <div className="space-y-1.5">

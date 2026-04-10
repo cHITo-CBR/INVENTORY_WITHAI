@@ -136,17 +136,10 @@ function LoginForm() {
           </form>
 
           <div className="mt-8 text-center text-[13px] text-gray-500 font-medium">
-<<<<<<< HEAD
-             New here?{" "}
-             <Link href="/signup" className="text-[#005914] hover:underline font-bold">
-               Sign up
-             </Link>
-=======
             New to the curator?{" "}
             <Link href="/signup" className="text-[#005914] hover:underline font-bold">
               Sign up
             </Link>
->>>>>>> Functionalitynalangsamagastakeholders1
           </div>
         </div>
 

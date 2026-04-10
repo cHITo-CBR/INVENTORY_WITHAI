@@ -18,7 +18,10 @@ export async function createStoreVisit(input: CreateStoreVisitInput) {
   try {
     const { data, error } = await supabase
       .from("store_visits")
-      .insert(input)
+      .insert({
+        ...input,
+        visit_date: new Date().toISOString().split("T")[0],
+      })
       .select()
       .single();
 

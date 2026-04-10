@@ -218,6 +218,7 @@ export async function updateProduct(id: string, formData: FormData) {
 }
 
 export async function getProductVariantsByProductId(productId: string): Promise<ProductVariantRow[]> {
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("product_variants")
     .select("*")
